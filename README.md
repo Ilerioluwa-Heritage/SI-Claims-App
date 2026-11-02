@@ -35,11 +35,11 @@ identical results.
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
-4. **Coloured register rows.** Should a red (session cancelled) or green (students did not attend) row be claimed?
 
 ### Decided
 
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
+- **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
 - **Uploads (2 Nov 2026).** All three files are uploaded for every run; nothing is read straight from Google.
 
 ## What's in this folder
@@ -48,13 +48,15 @@ identical results.
 |---|---|
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
 | `src/core/sources.ts` | The three files every run needs. |
-| `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
-| `tests/` | Automated checks for every rule, including the edge cases. |
+| `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
+| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. Rows it can't read with certainty are flagged, never guessed. |
+| `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |
+| `scripts/compare-register.ts` | Compares, per SI Leader, the SI session hours the rules give from the register with the hours on their submitted form. |
 
 Real data (exports, submitted forms, generated PDFs) is never stored in this
 folder or on GitHub. It stays in OneDrive. The `.gitignore` file blocks
-spreadsheets and PDFs from being saved here by accident.
+spreadsheets, Word documents and PDFs from being saved here by accident.
 
 ## How to run it (on this computer)
 

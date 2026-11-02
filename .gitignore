@@ -10,5 +10,7 @@ local-data/
 *.csv
 *.xlsx
 *.xls
+*.docx
+*.doc
 *.pdf
 !templates/*.pdf

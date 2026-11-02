@@ -10,6 +10,21 @@ export interface AllowanceBand {
   hours: number;
 }
 
+export interface RowColour {
+  meaning: string;
+  /** false: rows in this colour are left out of the claim. */
+  claimed: boolean;
+}
+
+/** Column headings in the daily register, by meaning. Matched ignoring case and punctuation. */
+export interface RegisterColumns {
+  date: string;
+  name: string;
+  module: string;
+  time: string;
+  observer: string;
+}
+
 export interface Settings {
   /** Rand per hour by level of study, as decimal text ("36.50") so no float creeps in. */
   rates: Record<Level, string>;
@@ -27,6 +42,12 @@ export interface Settings {
   adminHours: number;
   /** Usable session lines on one HRM-05 page (rule 11). */
   rowsPerPage: number;
+  /**
+   * Colours that mark rows in the daily register, by hex code. Uncoloured rows
+   * are claimed. A colour not listed here is flagged and not claimed.
+   */
+  registerColours: Record<string, RowColour>;
+  registerColumns: RegisterColumns;
 
   // Fixed text on the HRM-05.
   schoolName: string;
@@ -58,6 +79,20 @@ export const DEFAULT_SETTINGS: Settings = {
   monthlyCapHours: 80,
   adminHours: 80,
   rowsPerPage: 13,
+  // SI Administrator, 2 Nov 2026: cancelled and no-students rows are not claimed.
+  registerColours: {
+    FF0000: { meaning: 'Session cancelled', claimed: false },
+    '00FF00': { meaning: 'Students did not attend', claimed: false },
+    '8064A2': { meaning: 'Session not observed', claimed: true },
+    '8E7CC3': { meaning: 'Session not observed', claimed: true },
+  },
+  registerColumns: {
+    date: 'Date',
+    name: 'SI Leader',
+    module: 'SI Module',
+    time: 'Time',
+    observer: "Observer's Name",
+  },
 
   schoolName: 'CAE (SI)',
   costCentreNo: 'G082',
