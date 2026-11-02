@@ -25,7 +25,7 @@ identical results.
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
-4. **Class attendance (rule 6)** is built as written in the brief and needs your confirmation.
+4. **Class attendance (rule 6)** is built as written in the brief and needs your confirmation, except for the times: you decided on 2 Nov 2026 that class lines show the actual lecture time (11H10–13H10), not a rounded one. It's still open whether that time comes from the SIL's record or the lecturer's. For now the SIL's is used.
 
 ## What's in this folder
 
@@ -81,7 +81,7 @@ Full details are in `src/core/rules.ts`, with a comment on every rule.
 3. 2 hours of preparation are added to every SI session.
 4. Data allowance: 1-4 sessions get 2h, 5-8 get 3h, 9 or more get 4h. It's given one hour per session, starting from the earliest session.
 5. Added hours extend the end time. Nothing may end after 23H30; any extra moves onto the start time instead.
-6. A class counts only if the SIL and a lecturer both recorded it (same date and module). It's worth 2h from the rounded lecture start. Two classes on one day share a line.
+6. A class counts only if the SIL and a lecturer both recorded it (same date and module). It's worth 2h from the actual lecture start, which isn't rounded (11H10–13H10). Two classes on one day share a line.
 7. SI sessions come first, then classes, each in date order.
 8. The total is capped at 80 hours.
 9. Administrators are claimed at 80 hours.

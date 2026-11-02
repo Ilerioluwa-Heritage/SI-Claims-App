@@ -157,15 +157,27 @@ describe('rule 6: class attendance (TO CONFIRM)', () => {
     const r = claim([session(20, '14:00', '15:00')], confirmed);
     expect(r.rows.map(line)).toEqual([
       '20/10/2026 SI SESSION 14H00-19H00 5', // 1h + 2h prep + 2h data
-      '06/10/2026 CLASS ATTENDANCE 07H30/14H00-09H30/16H00 4',
+      '06/10/2026 CLASS ATTENDANCE 07H40/14H10-09H40/16H10 4',
     ]);
     expect(r.dataAllowanceHours).toBe(2); // classes don't count as sessions
     expect(formatHours(r.totalMinutes)).toBe('9');
   });
 
+  it('uses the actual lecture start, not rounded: 11H10 -> 11H10-13H10, 2h', () => {
+    const r = claim([], [lecture(7, 'CHEM101', '11:10')]);
+    expect(r.rows.map(line)).toEqual(['07/10/2026 CLASS ATTENDANCE 11H10-13H10 2']);
+    expect(r.amountCents).toBe(7300); // 2h x R36.50, same as before
+  });
+
   it('a class recorded twice is counted once', () => {
     const r = claim([], [lecture(6, 'MATH101', '07:40'), lecture(6, 'MATH 101', '07:40')]);
-    expect(r.rows.map(line)).toEqual(['06/10/2026 CLASS ATTENDANCE 07H30-09H30 2']);
+    expect(r.rows.map(line)).toEqual(['06/10/2026 CLASS ATTENDANCE 07H40-09H40 2']);
+    expect(r.notes.map((n) => n.kind)).toContain('duplicate-class');
+  });
+
+  it('a class recorded twice a few minutes apart is still counted once (the earlier time is kept)', () => {
+    const r = claim([], [lecture(6, 'MATH101', '07:42'), lecture(6, 'MATH101', '07:40')]);
+    expect(r.rows.map(line)).toEqual(['06/10/2026 CLASS ATTENDANCE 07H40-09H40 2']);
     expect(r.notes.map((n) => n.kind)).toContain('duplicate-class');
   });
 });

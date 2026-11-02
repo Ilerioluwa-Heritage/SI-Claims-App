@@ -163,7 +163,8 @@ export function isValidSession(s: SiSession): boolean {
 
 // ---------------------------------------------------------------------------
 // Rule 6: class attendance
-// AWAITING CONFIRMATION from the SI Administrator before this is final.
+// Times: the actual lecture start, not rounded (SI Administrator, 2 Nov 2026).
+// The rest of rule 6 is AWAITING CONFIRMATION before it is final.
 // ---------------------------------------------------------------------------
 
 /** Module codes compared without case, spaces or punctuation ("MATH 101" = "math101"). */
@@ -190,23 +191,23 @@ export function confirmClasses(
 }
 
 /**
- * Each confirmed class is worth `classHours`, starting at the rounded lecture
- * start. Classes on the same day share one line: "07H30/14H00" in,
- * "09H30/16H00" out, hours added together.
+ * Each confirmed class is worth `classHours`, from the actual lecture start
+ * (not rounded): 11H10 in, 13H10 out. Classes on the same day share one line:
+ * "07H40/14H10" in, "09H40/16H10" out, hours added together.
  */
 export function classRows(confirmed: ClassRecord[], settings: Settings, notes: Note[]): ClaimRow[] {
   const classMinutes = settings.classHours * 60;
   const byDate = new Map<string, number[]>();
   const seen = new Set<string>();
   for (const c of [...confirmed].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)) {
-    const start = roundStart(c.start);
-    const key = `${c.date}|${start}|${c.module.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
+    // Same module, same day, starts in the same half hour: one class recorded twice.
+    const key = `${c.date}|${roundStart(c.start)}|${c.module.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
     if (seen.has(key)) {
       notes.push({ kind: 'duplicate-class', message: `${c.module} on ${c.date} was recorded twice; counted once` });
       continue;
     }
     seen.add(key);
-    byDate.set(c.date, [...(byDate.get(c.date) ?? []), start]);
+    byDate.set(c.date, [...(byDate.get(c.date) ?? []), c.start]);
   }
   return [...byDate].map(([date, starts]) => ({
     dates: [date],

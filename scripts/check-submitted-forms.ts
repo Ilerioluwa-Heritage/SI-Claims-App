@@ -1,6 +1,7 @@
 // Checks submitted claim forms (as read by read-submitted-forms.ts) against
 // themselves: do the lines add up, does hours x rate give the amount, are the
-// times on the half hour, are the dates in the claim month, is the order right.
+// SI session times on the half hour, are the dates in the claim month, is the
+// order right.
 //
 //   node scripts/check-submitted-forms.ts local-data/october-2026-submitted.json 10 2026
 
@@ -19,6 +20,9 @@ const MONTHS = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 
 
 /** Hours text -> minutes, or null. */
 const minutes = (h: string) => (/^\d+(\.5)?$/.test(h.trim()) ? Math.round(Number(h) * 60) : null);
+
+/** Minutes -> "5h" or "1h40". */
+const asHours = (m: number) => `${Math.floor(m / 60)}h${m % 60 ? String(m % 60).padStart(2, '0') : ''}`;
 
 /** "07&08/10/2026" -> [{d:7,m:10,y:2026},{d:8,...}], or null if unreadable. */
 function dates(text: string) {
@@ -70,16 +74,17 @@ for (const f of forms) {
       continue;
     }
     if (/^00H00$/.test(l.timeOut) || /^00H00$/.test(l.timeIn)) issues.push(`${where}: time of 00H00`);
+    // SI sessions are rounded; classes use the actual lecture time.
+    const service = l.service.toUpperCase();
     const offGrid = [...ins, ...outs].filter((x) => x! % 30 !== 0);
-    if (offGrid.length) issues.push(`${where}: time not on the hour or half hour (${l.timeIn} - ${l.timeOut})`);
+    if (service === 'SI SESSION' && offGrid.length) issues.push(`${where}: time not on the hour or half hour (${l.timeIn} - ${l.timeOut})`);
 
     const hrs = minutes(l.hours);
     if (ins.length === 1 && outs.length === 1 && (!ds || ds.length === 1)) {
       const out = outs[0] === 0 ? 24 * 60 : outs[0]!;
-      if (hrs !== out - ins[0]!) issues.push(`${where}: ${l.timeIn}-${l.timeOut} is ${(out - ins[0]!) / 60}h but ${l.hours}h claimed`);
+      if (hrs !== out - ins[0]!) issues.push(`${where}: ${l.timeIn}-${l.timeOut} is ${asHours(out - ins[0]!)} but ${l.hours}h claimed`);
     }
 
-    const service = l.service.toUpperCase();
     if (service !== 'SI SESSION' && service !== 'CLASS ATTENDANCE') issues.push(`${where}: service "${l.service}"`);
     const firstDate = ds?.[0] ? `${ds[0].y}${String(ds[0].m).padStart(2, '0')}${String(ds[0].d).padStart(2, '0')}` : '';
     const key = `${service === 'SI SESSION' ? 0 : 1}${firstDate}`;
