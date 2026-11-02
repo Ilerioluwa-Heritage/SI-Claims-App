@@ -54,7 +54,7 @@ export function readTimeRange(text: string): { start: number | null; end: number
 }
 
 /** A debrief starting further than this from the register's start is a different session. */
-const SAME_SESSION_MINUTES = 30;
+export const SAME_SESSION_MINUTES = 30;
 
 /**
  * Missing register times come from the debrief (SI Administrator, 2 Nov 2026).

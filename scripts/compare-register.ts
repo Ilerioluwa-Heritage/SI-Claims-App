@@ -22,6 +22,7 @@ import {
   splitName,
   type RosterPerson,
 } from '../src/core/index.ts';
+import { crossCheck } from '../src/read/cross-check.ts';
 import { readDebrief, type DebriefRow } from '../src/read/debrief.ts';
 import { readRegister, type RegisterRow } from '../src/read/register.ts';
 
@@ -85,6 +86,9 @@ const show = (m: number) => (Number.isNaN(m) ? '?' : formatHours(m));
 
 const summary: string[] = [];
 const detail: string[] = [];
+const sideNote: string[] = [];
+const debriefOnly: string[] = [];
+const leftOutWithDebrief: string[] = [];
 const head = `${'SI Leader'.padEnd(24)} rows out flag used  rules h   form h  diff    level -> rate      form rate  reg/deb only`;
 summary.push(head, '-'.repeat(head.length));
 let same = 0;
@@ -109,11 +113,18 @@ for (const p of [...people.values()].sort((a, b) => a.label.localeCompare(b.labe
   const rateOk = !p.form || (rate !== null && formRate === rate);
   if (!rateOk) rateIssues++;
 
-  // Cross-check: days in the register with no debrief, and the reverse.
-  const regDays = p.rows.filter((r) => r.claimed || r.problem).map((r) => r.date);
-  const debDays = p.debrief.map((d) => d.date);
-  const regOnly = regDays.filter((d) => !debDays.includes(d));
-  const debOnly = debDays.filter((d) => !regDays.includes(d) && !p.rows.some((r) => r.date === d));
+  // Register vs debrief: the register wins.
+  const check = crossCheck(p.rows, p.debrief);
+  const regOnly = check.notInDebrief.map((r) => r.date);
+  const debOnly = check.notInRegister.map((d) => d.date);
+  if (regOnly.length) sideNote.push(`  ${p.label}: ${regOnly.map((d) => formatDates([d])).join(', ')}`);
+  for (const d of check.notInRegister) {
+    const times = `${d.start === null ? '?' : formatTime(d.start)}-${d.end === null ? '?' : formatTime(d.end)}`;
+    debriefOnly.push(`  ${p.label}: ${d.date ? formatDates([d.date]) : 'no date'} ${times} (debrief ${d.where})`);
+  }
+  for (const { register: r, debrief: d } of check.forLeftOut) {
+    leftOutWithDebrief.push(`  ${p.label}: ${formatDates([r.date])} ${r.time} - register says "${r.meaning}", but there's a debrief (${d.where})`);
+  }
 
   summary.push(
     `${p.label.slice(0, 24).padEnd(24)} ${String(p.rows.length).padStart(4)} ${String(leftOut.length).padStart(3)} ${String(flagged.length).padStart(4)} ${String(used.length).padStart(4)} ${formatHours(claim.uncappedMinutes).padStart(7)} ${(p.form ? show(formMinutes) : '-').padStart(8)}  ${diffText.padEnd(6)}  ${levelText.slice(0, 17).padEnd(17)}  ${(formRate || '-').padEnd(7)}${rateOk ? '   ' : ' ! '} ${regOnly.length}/${debOnly.length}`,
@@ -140,9 +151,18 @@ for (const p of [...people.values()].sort((a, b) => a.label.localeCompare(b.labe
     detail.push('  Submitted form, SI session lines:');
     for (const l of formSi) detail.push(`    ${l.date.padEnd(14)} ${`${l.timeIn}-${l.timeOut}`.padEnd(13)} ${l.hours}h`);
   }
-  if (regOnly.length) detail.push(`  In the register but no debrief that day: ${regOnly.map((d) => formatDates([d])).join(', ')}`);
-  if (debOnly.length) detail.push(`  Debrief but nothing in the register that day: ${debOnly.map((d) => formatDates([d])).join(', ')}`);
+  if (regOnly.length) detail.push(`  In the register but not on the debrief (claimed): ${regOnly.map((d) => formatDates([d])).join(', ')}`);
+  if (debOnly.length) detail.push(`  On the debrief but not in the register (not claimed): ${debOnly.map((d) => (d ? formatDates([d]) : 'no date')).join(', ')}`);
 }
+summary.push(
+  '',
+  'SIDE NOTE - sessions in the register but not on the debrief (claimed, because the register wins):',
+  ...(sideNote.length ? sideNote : ['  none']),
+  '',
+  'FLAGGED - debriefs with no session in the register (not claimed; a session may be missing from the register):',
+  ...(debriefOnly.length ? debriefOnly : ['  none']),
+);
+if (leftOutWithDebrief.length) summary.push('', 'NOTE - debriefs for sessions the register leaves out (not claimed):', ...leftOutWithDebrief);
 summary.push(
   '',
   `${same} of ${people.size} the same hours; ${rateIssues} rate differences (marked !).`,

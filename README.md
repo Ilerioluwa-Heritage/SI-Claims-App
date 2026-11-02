@@ -10,10 +10,14 @@ lecturers' class attendance records.
 Every run needs all three files. It won't start if any is missing.
 
 1. **Daily session register.** The Word document (.docx), uploaded as it is. Session times come from here. Its weekly tables give the date (written once per day), SI Leader, module, time (e.g. `15h30-17h00`), platform, number of students and observer. A row's colour marks a cancelled session, no students, or not observed.
-2. **Debrief form.** Download it from Google Sheets (File → Download → Microsoft Excel). It cross-checks the register: sessions that appear in one but not the other are flagged. Its "Level:" column gives each SI Leader's level of study, which sets the hourly rate. Its contact-details column is never read.
+2. **Debrief form.** Download it from Google Sheets (File → Download → Microsoft Excel). The register and the debrief must agree, but the register wins:
+   - A session in the register with no debrief is **still claimed**, and listed on a side note (SI Leader and dates).
+   - A debrief with no session in the register is **not claimed**, but flagged, because a session might be missing from the register.
+
+   The debrief also fills in missing register times. Its contact-details column is never read.
 3. **Class attendance (lecturers' records).** Classes are taken only from what the lecturers recorded. The SI Leaders' own class records aren't used.
 
-No roster file is needed. The list of SI Leaders comes from the names in the register, and each one's level comes from the debrief.
+**Uploaded once: the list of SI Leaders and their levels.** The app keeps it. It sets each person's rate and is the list names are matched against. The debrief's "Level:" answers are only checked against it.
 
 One program serves as both the website and the phone app. It's a web app that
 can be installed on Android and iPhone from the browser, so both always give
@@ -23,12 +27,26 @@ identical results.
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Claim rules and their tests | **In progress.** Rules written and tested; waiting for the October 2026 data to compare against |
+| 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
 | 2 | Filling the HRM-05 PDF | Not started |
 | 3 | Website: upload, checks, downloads, control list | Not started |
-| 4 | Installing on phones | Not started |
-| 5 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
-| 6 | Putting it online | Not started |
+| 4 | Claim form editor (see below) | Not started |
+| 5 | Installing on phones | Not started |
+| 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
+| 7 | Putting it online | Not started |
+
+### The claim form editor (planned, stage 4)
+
+A section of the app for forms that need an administrator's judgement:
+
+- Upload any HRM-05, filled or blank.
+- Change it with typed commands, such as:
+  - "add a session for the 12th that's 2hrs long that began at 18H00"
+  - "remove the session of the 07th"
+- See the change before it's applied.
+- The total hours and amount are worked out again after every change, and you download the corrected form.
+
+The app understands the commands itself, so nothing is sent to an AI service and the form's personal details stay on the device.
 
 ### Decisions still open (these affect what goes on the form)
 
@@ -41,6 +59,8 @@ identical results.
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
 - **Missing end times (2 Nov 2026).** If a register row has a start but no end time, the end time comes from that SI Leader's debrief for the same day and session. If the row has no time at all, both start and end come from the debrief. If there's no matching debrief, or it has no end time either, the row stays flagged and isn't claimed.
+- **Register vs debrief (3 Nov 2026).** The register wins. A register session with no debrief is claimed and goes on the side note; a debrief with no register session isn't claimed and is flagged. A session counts as the same if it's the same SI Leader, the same day, and starts within 30 minutes.
+- **Levels (3 Nov 2026).** They come from a list of SI Leaders and levels, uploaded once.
 - **Uploads (2 Nov 2026).** All three files are uploaded for every run; nothing is read straight from Google.
 
 ## What's in this folder
