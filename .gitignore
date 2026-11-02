@@ -13,4 +13,5 @@ local-data/
 *.docx
 *.doc
 *.pdf
-!templates/*.pdf
+# The blank HRM-05, kept only so the tests can fill it. The app uses the copy you upload.
+!tests/fixtures/*.pdf

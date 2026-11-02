@@ -1,11 +1,12 @@
 // Fills the HRM-05 for two made-up SI Leaders, so you can open the result:
-//   EXAMPLE AB - the month from `npm run demo` (one page)
-//   EXAMPLE CD - 15 sessions that can't be combined (continues on page 2)
-// Run it with:  npm run demo:pdf     The files go to local-data/ (never uploaded).
+//   EXAMPLE AB - the month from `npm run demo` (one form)
+//   EXAMPLE CD - 15 sessions that can't be combined (continues on a second form)
+// Run it with:  npm run demo:pdf  [-- "<blank form.pdf>"]
+// The blank form defaults to the test copy. The files go to local-data/ (never uploaded).
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { DEFAULT_SETTINGS as S, buildSilClaim, parseRand, parseTime, type ClassRecord, type SiSession } from '../src/core/index.ts';
-import { fillClaimForm, firstOfNextMonth, formFileName } from '../src/pdf/fill.ts';
+import { DEFAULT_SETTINGS as S, buildSilClaim, formatRand, parseRand, parseTime, type ClassRecord, type SiSession } from '../src/core/index.ts';
+import { checkClaimForm, fillClaimForm, firstOfNextMonth } from '../src/pdf/fill.ts';
 
 const t = (s: string) => parseTime(s) ?? 0;
 const at = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
@@ -31,11 +32,17 @@ const examples: { formName: string; sessions: SiSession[]; classes: ClassRecord[
   },
 ];
 
-const template = new Uint8Array(readFileSync('templates/HRM-05 blank.pdf'));
+const templatePath = process.argv[2] ?? 'tests/fixtures/HRM-05 blank.pdf';
+const template = new Uint8Array(readFileSync(templatePath));
+const problems = await checkClaimForm(template);
+if (problems.length) {
+  console.log(`The blank form ${templatePath} can't be used:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
+  process.exit(1);
+}
 mkdirSync('local-data', { recursive: true });
 for (const e of examples) {
   const claim = buildSilClaim({ sessions: e.sessions, classes: e.classes, rateCents: parseRand('36.50') }, S);
-  const pdf = await fillClaimForm(
+  const filled = await fillClaimForm(
     template,
     {
       formName: e.formName,
@@ -49,7 +56,7 @@ for (const e of examples) {
     },
     S,
   );
-  const file = `local-data/${formFileName(e.formName)}`;
-  writeFileSync(file, pdf);
-  console.log(`${file}: ${claim.rows.length} lines on ${claim.pages.length} page${claim.pages.length > 1 ? 's' : ''}, ${claim.totalMinutes / 60}h, R${(claim.amountCents / 100).toFixed(2)}`);
+  for (const f of filled.files) writeFileSync(`local-data/${f.fileName}`, f.bytes);
+  console.log(`${e.formName}: ${claim.rows.length} lines, ${claim.totalMinutes / 60}h, ${formatRand(claim.amountCents)} -> ${filled.files.map((f) => `local-data/${f.fileName}`).join(', ')}`);
+  for (const w of filled.warnings) console.log(`  ! ${w}`);
 }
