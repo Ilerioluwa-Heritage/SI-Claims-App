@@ -1,8 +1,9 @@
 // Compares, per SI Leader, the SI session hours the rules give from the daily
-// register with the SI session hours on the form they submitted. Class
-// attendance is left out: it needs the lecturers' records.
+// register with the SI session hours on the form they submitted, and the rate
+// their debrief level gives with the rate on the form. Class attendance is
+// left out: it needs the lecturers' records.
 //
-//   node scripts/compare-register.ts <register.docx> <submitted.json> <month> <year> <out.txt>
+//   node scripts/compare-register.ts <register.docx> <debrief.xlsx> <submitted.json> <month> <year> <out.txt>
 //
 // The summary is printed; the full detail (names, dates, times) goes to
 // <out.txt>. Keep that in local-data/, which is never uploaded.
@@ -13,24 +14,29 @@ import {
   buildSilClaim,
   formatDates,
   formatHours,
+  formatRand,
   formatTime,
   matchName,
   normaliseName,
+  parseRand,
   splitName,
   type RosterPerson,
 } from '../src/core/index.ts';
+import { readDebrief, type DebriefRow } from '../src/read/debrief.ts';
 import { readRegister, type RegisterRow } from '../src/read/register.ts';
 
 interface FormLine { row: number; date: string; service: string; timeIn: string; timeOut: string; hours: string }
 interface FormFigures { file: string; totals: Record<string, string>; lines: FormLine[] }
 
-const [registerPath, formsPath, monthArg, yearArg, outPath] = process.argv.slice(2);
-if (!registerPath || !formsPath || !monthArg || !yearArg || !outPath) {
-  throw new Error('Usage: <register.docx> <submitted.json> <month 1-12> <year> <out.txt>');
+const [registerPath, debriefPath, formsPath, monthArg, yearArg, outPath] = process.argv.slice(2);
+if (!registerPath || !debriefPath || !formsPath || !monthArg || !yearArg || !outPath) {
+  throw new Error('Usage: <register.docx> <debrief.xlsx> <submitted.json> <month 1-12> <year> <out.txt>');
 }
 const monthPrefix = `${yearArg}-${monthArg.padStart(2, '0')}-`;
 
-const all = readRegister(readFileSync(registerPath), S);
+const allDebrief = readDebrief(readFileSync(debriefPath), S);
+const debrief = allDebrief.filter((d) => d.date.startsWith(monthPrefix));
+const all = readRegister(readFileSync(registerPath), S, allDebrief);
 const rows = all.filter((r) => r.date.startsWith(monthPrefix));
 const undated = all.filter((r) => !r.date);
 
@@ -41,35 +47,48 @@ const roster: RosterPerson[] = forms.map((f) => {
   return { ...splitName(formName), formName, level: '', active: true, role: 'SIL', aliases: [] };
 });
 
-interface Person { label: string; form?: FormFigures; spellings: Set<string>; notes: Set<string>; rows: RegisterRow[] }
+interface Person {
+  label: string;
+  form?: FormFigures;
+  spellings: Set<string>;
+  notes: Set<string>;
+  rows: RegisterRow[];
+  debrief: DebriefRow[];
+}
 const people = new Map<string, Person>();
 for (const f of forms) {
   const label = f.file.replace(/\.pdf$/i, '');
-  people.set(label, { label, form: f, spellings: new Set(), notes: new Set(), rows: [] });
+  people.set(label, { label, form: f, spellings: new Set(), notes: new Set(), rows: [], debrief: [] });
 }
+const personFor = (name: string, source: string) => {
+  const m = matchName(name, roster);
+  const label = m.matched ? m.person.formName : `${normaliseName(name)} (no form)`;
+  const p = people.get(label) ?? { label, spellings: new Set(), notes: new Set(), rows: [], debrief: [] };
+  people.set(label, p);
+  if (m.matched && m.how !== 'exact') p.notes.add(`${source} "${name}" matched by ${m.how}`);
+  return p;
+};
 const noName: RegisterRow[] = [];
 for (const r of rows) {
   if (!r.name) {
     noName.push(r);
     continue;
   }
-  const m = matchName(r.name, roster);
-  const label = m.matched ? m.person.formName : `${normaliseName(r.name)} (no form: ${m.reason})`;
-  const p = people.get(label) ?? { label, spellings: new Set(), notes: new Set(), rows: [] };
+  const p = personFor(r.name, 'register');
   p.spellings.add(r.name);
-  if (m.matched && m.how !== 'exact') p.notes.add(`"${r.name}" matched by ${m.how}`);
   p.rows.push(r);
-  people.set(label, p);
 }
+for (const d of debrief) personFor(d.name, 'debrief').debrief.push(d);
 
 const minutesOf = (h: string) => (/^\d+(\.\d+)?$/.test(h.trim()) ? Math.round(Number(h) * 60) : NaN);
 const show = (m: number) => (Number.isNaN(m) ? '?' : formatHours(m));
 
 const summary: string[] = [];
 const detail: string[] = [];
-const head = `${'SI Leader'.padEnd(28)} rows  out  flag  used  rules SI h  form SI h  diff`;
+const head = `${'SI Leader'.padEnd(24)} rows out flag used  rules h   form h  diff    level -> rate      form rate  reg/deb only`;
 summary.push(head, '-'.repeat(head.length));
 let same = 0;
+let rateIssues = 0;
 for (const p of [...people.values()].sort((a, b) => a.label.localeCompare(b.label))) {
   const used = p.rows.filter((r) => r.claimed);
   const leftOut = p.rows.filter((r) => !r.problem && !r.claimed);
@@ -80,12 +99,29 @@ for (const p of [...people.values()].sort((a, b) => a.label.localeCompare(b.labe
   const diff = claim.uncappedMinutes - formMinutes;
   if (diff === 0) same++;
   const diffText = Number.isNaN(diff) ? 'n/a' : diff === 0 ? 'same' : `${diff > 0 ? '+' : '-'}${formatHours(Math.abs(diff))}`;
+
+  // Level of study from the debrief, and the rate it gives.
+  const levels = [...new Set(p.debrief.map((d) => d.level ?? `unknown "${d.levelText}"`))];
+  const level = levels.length === 1 && !levels[0]!.startsWith('unknown') ? levels[0]! : null;
+  const rate = level ? formatRand(parseRand(S.rates[level as keyof typeof S.rates])) : null;
+  const levelText = level ? `${level} -> ${rate}` : levels.length ? `MIXED: ${levels.join(' / ')}` : 'no debrief';
+  const formRate = p.form?.totals.rate ?? '';
+  const rateOk = !p.form || (rate !== null && formRate === rate);
+  if (!rateOk) rateIssues++;
+
+  // Cross-check: days in the register with no debrief, and the reverse.
+  const regDays = p.rows.filter((r) => r.claimed || r.problem).map((r) => r.date);
+  const debDays = p.debrief.map((d) => d.date);
+  const regOnly = regDays.filter((d) => !debDays.includes(d));
+  const debOnly = debDays.filter((d) => !regDays.includes(d) && !p.rows.some((r) => r.date === d));
+
   summary.push(
-    `${p.label.slice(0, 28).padEnd(28)} ${String(p.rows.length).padStart(4)} ${String(leftOut.length).padStart(4)} ${String(flagged.length).padStart(5)} ${String(used.length).padStart(5)} ${formatHours(claim.uncappedMinutes).padStart(10)} ${(p.form ? show(formMinutes) : '-').padStart(10)}  ${diffText}`,
+    `${p.label.slice(0, 24).padEnd(24)} ${String(p.rows.length).padStart(4)} ${String(leftOut.length).padStart(3)} ${String(flagged.length).padStart(4)} ${String(used.length).padStart(4)} ${formatHours(claim.uncappedMinutes).padStart(7)} ${(p.form ? show(formMinutes) : '-').padStart(8)}  ${diffText.padEnd(6)}  ${levelText.slice(0, 17).padEnd(17)}  ${(formRate || '-').padEnd(7)}${rateOk ? '   ' : ' ! '} ${regOnly.length}/${debOnly.length}`,
   );
 
-  if (diff === 0 && !flagged.length && !leftOut.length && !p.notes.size) continue;
-  detail.push('', `=== ${p.label}  (rules ${formatHours(claim.uncappedMinutes)}h, form ${p.form ? show(formMinutes) : '-'}h, ${diffText})`);
+  const filled = p.rows.filter((r) => r.timeFrom);
+  if (diff === 0 && rateOk && !flagged.length && !leftOut.length && !filled.length && !p.notes.size && !regOnly.length && !debOnly.length) continue;
+  detail.push('', `=== ${p.label}  (rules ${formatHours(claim.uncappedMinutes)}h, form ${p.form ? show(formMinutes) : '-'}h, ${diffText}; ${levelText}, form rate ${formRate || '-'})`);
   if (p.spellings.size > 1 || p.notes.size) detail.push(`  spellings in the register: ${[...p.spellings].join(' | ')}${p.notes.size ? `; ${[...p.notes].join('; ')}` : ''}`);
   detail.push('  Register, worked out by the rules:');
   for (const r of p.rows) {
@@ -97,16 +133,25 @@ for (const p of [...people.values()].sort((a, b) => a.label.localeCompare(b.labe
         : w
           ? `-> ${formatTime(w.finalStart)}-${formatTime(w.finalEnd)} = ${formatHours(w.minutes)}h (+${w.dataMinutes / 60}h data)`
           : '?';
-    detail.push(`    ${formatDates([r.date])}  ${r.time.padEnd(13)} ${outcome}`);
+    const time = r.timeFrom ? `${formatTime(r.start!)}-${formatTime(r.end!)}*` : r.time;
+    detail.push(`    ${formatDates([r.date])}  ${time.padEnd(13)} ${outcome}${r.timeFrom ? `   (* ${r.timeFrom})` : ''}`);
   }
   if (p.form) {
     detail.push('  Submitted form, SI session lines:');
     for (const l of formSi) detail.push(`    ${l.date.padEnd(14)} ${`${l.timeIn}-${l.timeOut}`.padEnd(13)} ${l.hours}h`);
   }
+  if (regOnly.length) detail.push(`  In the register but no debrief that day: ${regOnly.map((d) => formatDates([d])).join(', ')}`);
+  if (debOnly.length) detail.push(`  Debrief but nothing in the register that day: ${debOnly.map((d) => formatDates([d])).join(', ')}`);
 }
-summary.push('', `${same} of ${people.size} the same. "out" = left out by colour (cancelled / no students); "flag" = can't be read with certainty.`);
+summary.push(
+  '',
+  `${same} of ${people.size} the same hours; ${rateIssues} rate differences (marked !).`,
+  `"out" = left out by colour (cancelled / no students); "flag" = can't be read with certainty; "reg/deb only" = days in the register with no debrief / debriefs with nothing in the register.`,
+);
 if (noName.length) summary.push(`${noName.length} register rows in this month have no SI Leader name.`);
 if (undated.length) summary.push(`${undated.length} register rows (any month) have no readable date: ${undated.map((r) => r.where).join(', ')}`);
+const undatedDebrief = allDebrief.filter((d) => !d.date);
+if (undatedDebrief.length) summary.push(`${undatedDebrief.length} debrief rows have no readable date: ${undatedDebrief.map((d) => d.where).join(', ')}`);
 
 console.log(summary.join('\n'));
 writeFileSync(outPath, [...summary, ...detail, ...noName.map((r) => `no name: ${r.where} ${r.date} ${r.time}`)].join('\n') + '\n');

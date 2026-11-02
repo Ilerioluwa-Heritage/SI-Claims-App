@@ -8,9 +8,12 @@
 // Anything that can't be read with certainty is flagged, never guessed.
 
 import type { Element } from '@xmldom/xmldom';
+import { matchName, splitName } from '../core/names.ts';
 import type { RegisterColumns, Settings } from '../core/settings.ts';
 import { parseTime } from '../core/time.ts';
+import type { DebriefRow } from './debrief.ts';
 import { W, children, descendants, openOffice, wordText } from './office.ts';
+import { plainHeading, readDate } from './values.ts';
 
 export interface RegisterRow {
   /** Where the row is in the document, for the checks report: "table 64, row 3". */
@@ -23,6 +26,8 @@ export interface RegisterRow {
   time: string;
   start: number | null;
   end: number | null;
+  /** Set when the register had no end time and it came from the debrief: "end time from the debrief (row 12)". */
+  timeFrom: string | null;
   observer: string;
   /** Hex code of the row's colour ("FF0000"), or null if uncoloured. */
   colour: string | null;
@@ -32,19 +37,6 @@ export interface RegisterRow {
   claimed: boolean;
   /** Why the row can't be used as it is. Such rows are never claimed. */
   problem: string | null;
-}
-
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
-
-/** "Monday 06/10/2026" -> "2026-10-06"; null if there's no real date in it. */
-export function readDate(text: string): string | null {
-  const m = /(\d{1,2})\s*[/.-]\s*(\d{1,2})\s*[/.-]\s*(\d{4})/.exec(text);
-  if (!m) return null;
-  const [day, month, year] = [Number(m[1]), Number(m[2]), Number(m[3])];
-  const leap = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
-  const days = month === 2 && leap ? 29 : DAYS_IN_MONTH[month - 1];
-  if (!days || day < 1 || day > days) return null;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 }
 
 /** "15h30-17h00" -> start and end in minutes. "15h30-" has a start but no end. */
@@ -61,15 +53,44 @@ export function readTimeRange(text: string): { start: number | null; end: number
   return { start, end, problem: null };
 }
 
-type Positions = Record<keyof RegisterColumns, number>;
+/** A debrief starting further than this from the register's start is a different session. */
+const SAME_SESSION_MINUTES = 30;
 
-const plain = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+/**
+ * Missing register times come from the debrief (SI Administrator, 2 Nov 2026).
+ * A row with a start but no end takes the end of the same SI Leader's debrief
+ * for that day that starts within 30 minutes of it. A row with no time at all
+ * takes start and end from the SI Leader's only debrief that day. Anything
+ * less certain stays flagged.
+ */
+function timeFromDebrief(
+  name: string,
+  date: string,
+  start: number | null,
+  debrief: DebriefRow[],
+): { start: number; end: number; note: string } | { problem: string } {
+  if (!debrief.length) return { problem: 'no debrief to take it from' };
+  const person = { ...splitName(name), formName: name, level: '', active: true, role: 'SIL' as const, aliases: [] };
+  const sameDay = debrief.filter((d) => d.date === date && matchName(d.name, [person]).matched);
+  const candidates = start === null ? sameDay : sameDay.filter((d) => d.start !== null && Math.abs(d.start - start) <= SAME_SESSION_MINUTES);
+  if (!candidates.length) {
+    return { problem: sameDay.length ? `no debrief that day starts within ${SAME_SESSION_MINUTES} minutes of it` : 'no debrief for that day' };
+  }
+  if (candidates.length > 1) return { problem: `${candidates.length} debriefs that day could be this session` };
+  const d = candidates[0]!;
+  const from = start ?? d.start;
+  if (from === null || d.end === null) return { problem: `the debrief (${d.where}) has no time either` };
+  if (d.end <= from && d.end !== 0) return { problem: `the debrief's end time (${d.where}) isn't after the start` };
+  return { start: from, end: d.end, note: `${start === null ? 'time' : 'end time'} from the debrief (${d.where})` };
+}
+
+type Positions = Record<keyof RegisterColumns, number>;
 
 /** Column positions if this row is the heading row, else null. */
 function headingPositions(texts: string[], columns: RegisterColumns): Positions | null {
   const pos: Partial<Positions> = {};
   for (const [key, heading] of Object.entries(columns) as [keyof RegisterColumns, string][]) {
-    const i = texts.findIndex((t) => plain(t) === plain(heading));
+    const i = texts.findIndex((t) => plainHeading(t) === plainHeading(heading));
     if (i < 0) return null;
     pos[key] = i;
   }
@@ -93,8 +114,11 @@ function cellColours(tc: Element): string[] {
   return [...shading, ...highlight].map((c) => c.toUpperCase()).filter((c) => c && c !== 'AUTO' && c !== 'FFFFFF' && c !== 'NONE');
 }
 
-/** Every session row in the register, in document order. Filter by month afterwards. */
-export function readRegister(bytes: Uint8Array, settings: Settings): RegisterRow[] {
+/**
+ * Every session row in the register, in document order. Filter by month
+ * afterwards. `debrief` fills in missing times; without it they stay flagged.
+ */
+export function readRegister(bytes: Uint8Array, settings: Settings, debrief: DebriefRow[] = []): RegisterRow[] {
   const doc = openOffice(bytes, ['word/document.xml']).get('word/document.xml');
   if (!doc) throw new Error('This Word file has no document inside it.');
   const colourList = Object.entries(settings.registerColours).map(([hex, c]) => ({ hex: hex.toUpperCase(), ...c }));
@@ -129,15 +153,26 @@ export function readRegister(bytes: Uint8Array, settings: Settings): RegisterRow
       const [name, module, time] = [get('name'), get('module'), get('time')];
       if (!name && !module && !time) continue; // an empty line, e.g. a day with no sessions
 
-      const range = readTimeRange(time);
       const colours = [...new Set(cells.filter((_, i) => i !== pos!.date).flatMap(cellColours))];
       const known = colours.length === 1 ? colourList.find((c) => c.hex === colours[0]) : undefined;
       let colourProblem: string | null = null;
       if (colours.length > 1) colourProblem = `more than one colour (${colours.join(', ')})`;
       else if (colours.length === 1 && !known) colourProblem = `colour ${colours[0]} isn't in the settings`;
-
       // A row whose colour isn't claimed (e.g. cancelled) is left out whatever else it says.
       const leftOut = known !== undefined && !known.claimed;
+
+      let range = readTimeRange(time);
+      let timeFrom: string | null = null;
+      if (!leftOut && name && date && (range.problem === 'no end time' || range.problem === 'no time')) {
+        const found = timeFromDebrief(name, date, range.start, debrief);
+        if ('note' in found) {
+          range = { start: found.start, end: found.end, problem: null };
+          timeFrom = found.note;
+        } else {
+          range = { ...range, problem: `${range.problem}; ${found.problem}` };
+        }
+      }
+
       const problem = leftOut ? null : ((!name ? 'no SI Leader name' : null) ?? dateProblem ?? range.problem ?? colourProblem);
       rows.push({
         where: `table ${t + 1}, row ${r + 1}`,
@@ -147,6 +182,7 @@ export function readRegister(bytes: Uint8Array, settings: Settings): RegisterRow
         time,
         start: range.start,
         end: range.end,
+        timeFrom,
         observer: get('observer'),
         colour: colours.length === 1 ? colours[0]! : null,
         meaning: known?.meaning ?? null,

@@ -40,6 +40,7 @@ identical results.
 
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
+- **Missing end times (2 Nov 2026).** If a register row has a start but no end time, the end time comes from that SI Leader's debrief for the same day and session. If the row has no time at all, both start and end come from the debrief. If there's no matching debrief, or it has no end time either, the row stays flagged and isn't claimed.
 - **Uploads (2 Nov 2026).** All three files are uploaded for every run; nothing is read straight from Google.
 
 ## What's in this folder
@@ -49,10 +50,10 @@ identical results.
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
 | `src/core/sources.ts` | The three files every run needs. |
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
-| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. Rows it can't read with certainty are flagged, never guessed. |
+| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |
-| `scripts/compare-register.ts` | Compares, per SI Leader, the SI session hours the rules give from the register with the hours on their submitted form. |
+| `scripts/compare-register.ts` | Compares, per SI Leader, the SI session hours the rules give from the register with the hours on their submitted form. Also checks the rate from their debrief level against the rate on their form, and lists days that are in the register but not the debrief, and the reverse. |
 
 Real data (exports, submitted forms, generated PDFs) is never stored in this
 folder or on GitHub. It stays in OneDrive. The `.gitignore` file blocks

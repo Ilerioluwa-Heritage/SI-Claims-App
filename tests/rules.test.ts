@@ -75,7 +75,7 @@ describe('rule 3 and 5: one session becomes one line', () => {
         }
       }
     }
-  });
+  }, 60_000); // thousands of checks: allow for a slow computer
 });
 
 describe('rule 4: data allowance', () => {

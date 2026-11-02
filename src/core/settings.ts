@@ -25,6 +25,16 @@ export interface RegisterColumns {
   observer: string;
 }
 
+/** Column headings in the debrief export, by meaning. Only these columns are ever read. */
+export interface DebriefColumns {
+  date: string;
+  name: string;
+  module: string;
+  level: string;
+  start: string;
+  end: string;
+}
+
 export interface Settings {
   /** Rand per hour by level of study, as decimal text ("36.50") so no float creeps in. */
   rates: Record<Level, string>;
@@ -48,6 +58,9 @@ export interface Settings {
    */
   registerColours: Record<string, RowColour>;
   registerColumns: RegisterColumns;
+  debriefColumns: DebriefColumns;
+  /** Each answer to the debrief's level question, and the level of study (so the rate) it means. */
+  debriefLevels: Record<string, Level>;
 
   // Fixed text on the HRM-05.
   schoolName: string;
@@ -92,6 +105,23 @@ export const DEFAULT_SETTINGS: Settings = {
     module: 'SI Module',
     time: 'Time',
     observer: "Observer's Name",
+  },
+  debriefColumns: {
+    date: 'Date:',
+    name: 'Surname & Initials:',
+    module: 'Module Code',
+    level: 'Level:',
+    start: 'Start time:',
+    end: 'End Time',
+  },
+  debriefLevels: {
+    'Level 2 (Second Year)': '2nd year',
+    'Level 3 (Third Year)': '3rd year',
+    'Level 4 (Fourth Year)': '4th year',
+    PGCE: 'PGCE',
+    Honours: 'Honours',
+    Masters: 'Masters',
+    PHD: 'PhD',
   },
 
   schoolName: 'CAE (SI)',

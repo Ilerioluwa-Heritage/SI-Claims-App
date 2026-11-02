@@ -1,8 +1,10 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS as S } from '../src/core/index.ts';
+import { DEFAULT_SETTINGS as S, parseTime } from '../src/core/index.ts';
+import type { DebriefRow } from '../src/read/debrief.ts';
 import { W } from '../src/read/office.ts';
-import { readDate, readRegister, readTimeRange, type RegisterRow } from '../src/read/register.ts';
+import { readRegister, readTimeRange, type RegisterRow } from '../src/read/register.ts';
+import { readDate } from '../src/read/values.ts';
 
 // Made-up register documents, laid out like the real one. No real names.
 const cell = (text: string, fill?: string) =>
@@ -78,8 +80,8 @@ describe('reading the daily register (Word)', () => {
       table(HEADING, line('Monday 05/10/2026', 'Example AB', '15h30-'), line('', 'Example AB', ''), line('', '', '15h30-17h00')),
     );
     expect(rows.map(brief)).toEqual([
-      '2026-10-05 Example AB 930-null not claimed (no end time)',
-      '2026-10-05 Example AB null-null not claimed (no time)',
+      '2026-10-05 Example AB 930-null not claimed (no end time; no debrief to take it from)',
+      '2026-10-05 Example AB null-null not claimed (no time; no debrief to take it from)',
       '2026-10-05  930-1020 not claimed (no SI Leader name)',
     ]);
   });
@@ -108,6 +110,63 @@ describe('reading the daily register (Word)', () => {
 
   it("says plainly when the file isn't a Word document", () => {
     expect(() => readRegister(strToU8('not a zip'), S)).toThrow('This is not a Word or Excel file (.docx or .xlsx).');
+  });
+});
+
+describe('missing register times come from the debrief', () => {
+  const debriefLine = (day: number, name: string, start: string, end: string, where = 'row 2'): DebriefRow => ({
+    where,
+    date: `2026-10-${String(day).padStart(2, '0')}`,
+    name,
+    module: 'MATH101',
+    levelText: 'Level 3 (Third Year)',
+    level: '3rd year',
+    start: parseTime(start),
+    end: parseTime(end),
+  });
+  const readWith = (debrief: DebriefRow[], ...lines: string[]) => readRegister(docx(table(HEADING, ...lines)), S, debrief);
+
+  it("takes the end time from the SI Leader's debrief for that session", () => {
+    const [r] = readWith([debriefLine(5, 'EXAMPLE. AB', '18:05', '19:30')], line('Monday 05/10/2026', 'Example AB', '18h00-'));
+    expect(r).toMatchObject({ start: 1080, end: 1170, claimed: true, problem: null, timeFrom: 'end time from the debrief (row 2)' });
+  });
+
+  it("keeps the register's start time even when the debrief's differs a little", () => {
+    const [r] = readWith([debriefLine(5, 'Example AB', '18:20', '19:30')], line('Monday 05/10/2026', 'Example AB', '18h00-'));
+    expect(r).toMatchObject({ start: 1080, end: 1170 });
+  });
+
+  it("takes start and end from the debrief when the register row has no time, if it's the only one that day", () => {
+    const [r] = readWith([debriefLine(5, 'Example AB', '13:30', '15:00')], line('Monday 05/10/2026', 'Example AB', ''));
+    expect(r).toMatchObject({ start: 810, end: 900, claimed: true, timeFrom: 'time from the debrief (row 2)' });
+  });
+
+  it('stays flagged when no single debrief fits', () => {
+    const rows = readWith(
+      [
+        debriefLine(5, 'Sample CD', '18:00', '19:30'), // someone else
+        debriefLine(6, 'Example AB', '18:00', '19:30'), // another day
+        debriefLine(7, 'Example AB', '14:00', '15:30'), // too far from 18h00
+        debriefLine(8, 'Example AB', '13:00', '14:00', 'row 5'),
+        debriefLine(8, 'Example AB', '16:00', '17:00', 'row 6'),
+        debriefLine(9, 'Example AB', '18:00', '', 'row 7'),
+      ],
+      line('Monday 05/10/2026', 'Example AB', '18h00-'),
+      line('Wednesday 07/10/2026', 'Example AB', '18h00-'),
+      line('Thursday 08/10/2026', 'Example AB', ''),
+      line('Friday 09/10/2026', 'Example AB', '18h00-'),
+    );
+    expect(rows.map((r) => `${r.claimed} ${r.problem}`)).toEqual([
+      'false no end time; no debrief for that day',
+      'false no end time; no debrief that day starts within 30 minutes of it',
+      'false no time; 2 debriefs that day could be this session',
+      'false no end time; the debrief (row 7) has no time either',
+    ]);
+  });
+
+  it("doesn't fill a cancelled row", () => {
+    const [r] = readWith([debriefLine(5, 'Example AB', '18:00', '19:30')], line('Monday 05/10/2026', 'Example AB', '18h00-', 'FF0000'));
+    expect(r).toMatchObject({ claimed: false, timeFrom: null, meaning: 'Session cancelled' });
   });
 });
 
