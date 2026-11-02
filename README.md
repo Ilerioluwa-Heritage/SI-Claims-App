@@ -9,11 +9,11 @@ lecturers' class attendance records.
 
 Every run needs all three files. It won't start if any is missing.
 
-1. **Daily session register.** Session times come from here.
-2. **Debrief form.** Used only to cross-check the register. Sessions that appear in one but not the other are flagged.
+1. **Daily session register.** The Word document (.docx), uploaded as it is. Session times come from here. Its weekly tables give the date (written once per day), SI Leader, module, time (e.g. `15h30-17h00`), platform, number of students and observer. A row's colour marks a cancelled session, no students, or not observed.
+2. **Debrief form.** Download it from Google Sheets (File → Download → Microsoft Excel). It cross-checks the register: sessions that appear in one but not the other are flagged. Its "Level:" column gives each SI Leader's level of study, which sets the hourly rate. Its contact-details column is never read.
 3. **Class attendance (lecturers' records).** Classes are taken only from what the lecturers recorded. The SI Leaders' own class records aren't used.
 
-Download each one from Google Sheets (File → Download → Microsoft Excel) and upload it.
+No roster file is needed. The list of SI Leaders comes from the names in the register, and each one's level comes from the debrief.
 
 One program serves as both the website and the phone app. It's a web app that
 can be installed on Android and iPhone from the browser, so both always give
@@ -35,6 +35,7 @@ identical results.
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
+4. **Coloured register rows.** Should a red (session cancelled) or green (students did not attend) row be claimed?
 
 ### Decided
 
