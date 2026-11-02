@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETTINGS,
   buildSilClaim,
-  confirmClasses,
   dataAllowanceHours,
   formatDates,
   formatHours,
@@ -33,7 +32,7 @@ const line = (r: { dates: string[]; service: string; timeIn: string; timeOut: st
   `${formatDates(r.dates)} ${r.service} ${r.timeIn}-${r.timeOut} ${formatHours(r.minutes)}`;
 
 const claim = (sessions: SiSession[], classes: ClassRecord[] = [], settings = S) =>
-  buildSilClaim({ sessions, confirmedClasses: classes, rateCents: RATE }, settings);
+  buildSilClaim({ sessions, classes, rateCents: RATE }, settings);
 
 describe('rule 3 and 5: one session becomes one line', () => {
   it('rounds, then adds 2h prep and the data hour to the end', () => {
@@ -142,19 +141,11 @@ describe('a whole month: 4 vs 5 vs 9 sessions of one hour each', () => {
   });
 });
 
-describe('rule 6: class attendance (TO CONFIRM)', () => {
-  const sil = [lecture(6, 'MATH101', '07:40'), lecture(6, 'STAT102', '14:10'), lecture(8, 'BIOL111', '10:00')];
-  const lecturer = [lecture(6, 'math 101', '07:30'), lecture(6, 'STAT102', '14:00'), lecture(9, 'BIOL111', '10:00')];
-
-  it('counts only classes both the SIL and a lecturer recorded on the same date and module', () => {
-    const { confirmed, unconfirmed } = confirmClasses(sil, lecturer);
-    expect(confirmed.map((c) => c.module)).toEqual(['MATH101', 'STAT102']);
-    expect(unconfirmed.map((c) => `${c.module} ${c.date}`)).toEqual(['BIOL111 2026-10-08']);
-  });
+describe("rule 6: class attendance, from the lecturer's record", () => {
+  const lecturer = [lecture(6, 'MATH101', '07:40'), lecture(6, 'STAT102', '14:10')];
 
   it('two classes on one day share a line; no prep or data hours; after SI sessions', () => {
-    const { confirmed } = confirmClasses(sil, lecturer);
-    const r = claim([session(20, '14:00', '15:00')], confirmed);
+    const r = claim([session(20, '14:00', '15:00')], lecturer);
     expect(r.rows.map(line)).toEqual([
       '20/10/2026 SI SESSION 14H00-19H00 5', // 1h + 2h prep + 2h data
       '06/10/2026 CLASS ATTENDANCE 07H40/14H10-09H40/16H10 4',
@@ -248,7 +239,7 @@ describe('settings drive the rules', () => {
   it('a different prep time, cap and rate change the result', () => {
     const settings = { ...S, prepHoursPerSession: 1, monthlyCapHours: 10 };
     const r = buildSilClaim(
-      { sessions: Array.from({ length: 5 }, (_, i) => session(i + 1, '14:00', '15:00')), confirmedClasses: [], rateCents: parseRand('47.00') },
+      { sessions: Array.from({ length: 5 }, (_, i) => session(i + 1, '14:00', '15:00')), classes: [], rateCents: parseRand('47.00') },
       settings,
     );
     // 5 x (1h + 1h) + 3h data = 13h, capped at 10h, x R47.00

@@ -17,7 +17,7 @@ export interface SiSession {
   module?: string;
 }
 
-/** One lecture, as recorded by a SIL or by a lecturer. */
+/** One lecture a SIL attended, from the lecturer's class attendance record. */
 export interface ClassRecord {
   date: string;
   module: string;
@@ -162,44 +162,21 @@ export function isValidSession(s: SiSession): boolean {
 }
 
 // ---------------------------------------------------------------------------
-// Rule 6: class attendance
-// Times: the actual lecture start, not rounded (SI Administrator, 2 Nov 2026).
-// The rest of rule 6 is AWAITING CONFIRMATION before it is final.
+// Rule 6: class attendance (SI Administrator, 2 Nov 2026)
+// Classes come only from the lecturer's class attendance record; the SIL's own
+// record isn't used. Times are the actual lecture start, not rounded.
 // ---------------------------------------------------------------------------
 
-/** Module codes compared without case, spaces or punctuation ("MATH 101" = "math101"). */
-export function sameModule(a: string, b: string): boolean {
-  const norm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  return norm(a) !== '' && norm(a) === norm(b);
-}
-
 /**
- * A class counts only if the SIL and a lecturer both recorded the same date
- * and the same module. `lecturerRecords` must already be the ones for this SIL.
+ * Each class the lecturer recorded is worth `classHours`, from the actual
+ * lecture start (not rounded): 11H10 in, 13H10 out. Classes on the same day
+ * share one line: "07H40/14H10" in, "09H40/16H10" out, hours added together.
  */
-export function confirmClasses(
-  silRecords: ClassRecord[],
-  lecturerRecords: ClassRecord[],
-): { confirmed: ClassRecord[]; unconfirmed: ClassRecord[] } {
-  const confirmed: ClassRecord[] = [];
-  const unconfirmed: ClassRecord[] = [];
-  for (const r of silRecords) {
-    const ok = lecturerRecords.some((l) => l.date === r.date && sameModule(l.module, r.module));
-    (ok ? confirmed : unconfirmed).push(r);
-  }
-  return { confirmed, unconfirmed };
-}
-
-/**
- * Each confirmed class is worth `classHours`, from the actual lecture start
- * (not rounded): 11H10 in, 13H10 out. Classes on the same day share one line:
- * "07H40/14H10" in, "09H40/16H10" out, hours added together.
- */
-export function classRows(confirmed: ClassRecord[], settings: Settings, notes: Note[]): ClaimRow[] {
+export function classRows(classes: ClassRecord[], settings: Settings, notes: Note[]): ClaimRow[] {
   const classMinutes = settings.classHours * 60;
   const byDate = new Map<string, number[]>();
   const seen = new Set<string>();
-  for (const c of [...confirmed].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)) {
+  for (const c of [...classes].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)) {
     // Same module, same day, starts in the same half hour: one class recorded twice.
     const key = `${c.date}|${roundStart(c.start)}|${c.module.toUpperCase().replace(/[^A-Z0-9]/g, '')}`;
     if (seen.has(key)) {
@@ -277,8 +254,9 @@ export function paginate(rows: ClaimRow[], rowsPerPage: number): ClaimRow[][] {
 // One SIL's month, all rules in order
 // ---------------------------------------------------------------------------
 
+/** `classes` are this SIL's lines from the lecturers' class attendance records. */
 export function buildSilClaim(
-  input: { sessions: SiSession[]; confirmedClasses: ClassRecord[]; rateCents: number },
+  input: { sessions: SiSession[]; classes: ClassRecord[]; rateCents: number },
   settings: Settings,
 ): ClaimResult {
   const notes: Note[] = [];
@@ -317,7 +295,7 @@ export function buildSilClaim(
     minutes: w.minutes,
   }));
   // Rule 7: SI sessions first in date order, then classes in date order.
-  const allRows = [...siRows, ...classRows(input.confirmedClasses, settings, notes)];
+  const allRows = [...siRows, ...classRows(input.classes, settings, notes)];
 
   const uncappedMinutes = allRows.reduce((sum, r) => sum + r.minutes, 0);
   const capMinutes = settings.monthlyCapHours * 60;

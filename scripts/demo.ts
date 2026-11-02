@@ -5,7 +5,6 @@
 import {
   DEFAULT_SETTINGS as settings,
   buildSilClaim,
-  confirmClasses,
   formatDates,
   formatHours,
   formatRand,
@@ -24,18 +23,13 @@ const sessions: SiSession[] = [
   { date: '2026-10-14', start: t('14:00'), end: t('15:00'), module: 'MATH101' },
   { date: '2026-10-21', start: t('14:05'), end: t('15:10'), module: 'MATH101' },
 ];
-const silClasses: ClassRecord[] = [
+// From the lecturers' class attendance records.
+const classes: ClassRecord[] = [
   { date: '2026-10-06', module: 'MATH101', start: t('07:40') },
-  { date: '2026-10-06', module: 'STAT102', start: t('14:00') },
-  { date: '2026-10-13', module: 'MATH101', start: t('07:30') },
-];
-const lecturerClasses: ClassRecord[] = [
-  { date: '2026-10-06', module: 'MATH 101', start: t('07:30') },
   { date: '2026-10-06', module: 'STAT102', start: t('14:00') },
 ];
 
-const { confirmed, unconfirmed } = confirmClasses(silClasses, lecturerClasses);
-const claim = buildSilClaim({ sessions, confirmedClasses: confirmed, rateCents: parseRand('36.50') }, settings);
+const claim = buildSilClaim({ sessions, classes, rateCents: parseRand('36.50') }, settings);
 
 const pad = (s: string, n: number) => s.padEnd(n);
 console.log('\nEXAMPLE AB (3rd year, R36.50/h) - OCTOBER 2026\n');
@@ -61,5 +55,4 @@ console.log(`\nTotal: ${formatHours(claim.totalMinutes)} hours x ${formatRand(cl
 
 console.log('\nChecks:');
 for (const n of claim.notes) console.log(`  - ${n.message}`);
-for (const c of unconfirmed) console.log(`  - Class ${c.module} on ${c.date}: no lecturer confirmed it, so it is not claimed`);
 console.log();

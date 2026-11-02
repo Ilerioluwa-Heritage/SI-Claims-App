@@ -3,7 +3,17 @@
 Builds the monthly HRM-05 Student Assistance claim forms for the Supplemental
 Instruction (SI) programme at the Centre for Academic Excellence, University of
 Limpopo, from the SI Leaders' daily session register, the debrief form and the
-class attendance records.
+lecturers' class attendance records.
+
+## What you upload each month
+
+Every run needs all three files. It won't start if any is missing.
+
+1. **Daily session register.** Session times come from here.
+2. **Debrief form.** Used only to cross-check the register. Sessions that appear in one but not the other are flagged.
+3. **Class attendance (lecturers' records).** Classes are taken only from what the lecturers recorded. The SI Leaders' own class records aren't used.
+
+Download each one from Google Sheets (File → Download → Microsoft Excel) and upload it.
 
 One program serves as both the website and the phone app. It's a web app that
 can be installed on Android and iPhone from the browser, so both always give
@@ -17,7 +27,7 @@ identical results.
 | 2 | Filling the HRM-05 PDF | Not started |
 | 3 | Website: upload, checks, downloads, control list | Not started |
 | 4 | Installing on phones | Not started |
-| 5 | Reading straight from Google Sheets | Not started |
+| 5 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
 | 6 | Putting it online | Not started |
 
 ### Decisions still open (these affect what goes on the form)
@@ -25,13 +35,18 @@ identical results.
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
-4. **Class attendance (rule 6)** is built as written in the brief and needs your confirmation, except for the times: you decided on 2 Nov 2026 that class lines show the actual lecture time (11H10–13H10), not a rounded one. It's still open whether that time comes from the SIL's record or the lecturer's. For now the SIL's is used.
+
+### Decided
+
+- **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
+- **Uploads (2 Nov 2026).** All three files are uploaded for every run; nothing is read straight from Google.
 
 ## What's in this folder
 
 | Folder / file | What it is |
 |---|---|
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
+| `src/core/sources.ts` | The three files every run needs. |
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
 | `tests/` | Automated checks for every rule, including the edge cases. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |
@@ -81,7 +96,7 @@ Full details are in `src/core/rules.ts`, with a comment on every rule.
 3. 2 hours of preparation are added to every SI session.
 4. Data allowance: 1-4 sessions get 2h, 5-8 get 3h, 9 or more get 4h. It's given one hour per session, starting from the earliest session.
 5. Added hours extend the end time. Nothing may end after 23H30; any extra moves onto the start time instead.
-6. A class counts only if the SIL and a lecturer both recorded it (same date and module). It's worth 2h from the actual lecture start, which isn't rounded (11H10–13H10). Two classes on one day share a line.
+6. Classes come only from the lecturers' class attendance records. Each class is worth 2h from the lecturer's actual lecture start, which isn't rounded (11H10–13H10). Two classes on one day share a line.
 7. SI sessions come first, then classes, each in date order.
 8. The total is capped at 80 hours.
 9. Administrators are claimed at 80 hours.
