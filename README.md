@@ -28,7 +28,7 @@ identical results.
 | Stage | What | Status |
 |---|---|---|
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
-| 2 | Filling the HRM-05 PDF | Not started |
+| 2 | Filling the HRM-05 PDF | **Done, waiting for your look at the samples.** Fills one form per person and keeps it fillable. Personal fields are left blank, and more than 13 lines continue on a second page. |
 | 3 | Website: upload, checks, downloads, control list | Not started |
 | 4 | Claim form editor (see below) | Not started |
 | 5 | Installing on phones | Not started |
@@ -72,6 +72,8 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
 | `src/core/sources.ts` | The three files every run needs. |
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
+| `src/pdf/fill.ts` | Fills the HRM-05. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. Text that's too long for its box is made smaller to fit. A claim with more than 13 lines continues on a second copy of the form. That copy shows the same totals, and its fields end in `_p2`. |
+| `templates/HRM-05 blank.pdf` | The blank claim form the program fills. |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
@@ -110,6 +112,12 @@ You need Node.js and Git. They were installed on 2 November 2026.
 
    ```
    npm run demo
+   ```
+
+6. **See filled claim forms.** This fills the HRM-05 for two made-up people and saves `EXAMPLE AB.pdf` (one page) and `EXAMPLE CD.pdf` (two pages) in the `local-data` folder. Open them in your usual PDF reader:
+
+   ```
+   npm run demo:pdf
    ```
 
 If a test fails, don't hand anything over. A failing test means a rule
