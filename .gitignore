@@ -1,0 +1,14 @@
+# Helper libraries (re-downloaded by `npm install`)
+node_modules/
+
+# Build output
+dist/
+
+# Real monthly data must never go into the repository (POPIA).
+# Keep exports, submitted forms and generated PDFs in OneDrive instead.
+local-data/
+*.csv
+*.xlsx
+*.xls
+*.pdf
+!templates/*.pdf
