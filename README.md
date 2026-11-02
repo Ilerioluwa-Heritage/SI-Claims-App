@@ -48,6 +48,8 @@ A section of the app for forms that need an administrator's judgement:
 
 The app understands the commands itself, so nothing is sent to an AI service and the form's personal details stay on the device.
 
+Adding a session applies the same rules as the generator (decided 3 Nov 2026). "2hrs that began at 18H00" is rounded and gets the 2h preparation added: 18H00–22H00, 4h. It also ends by 23H30, with any extra moved onto the start. If the change moves the SI Leader into a different data allowance band (e.g. 4 → 5 sessions), the editor says so and shows the command to add or remove that hour, rather than guessing which line it belongs on.
+
 ### Decisions still open (these affect what goes on the form)
 
 1. **Data allowance with only one session.** Right now that session gets both hours.
@@ -72,7 +74,9 @@ The app understands the commands itself, so nothing is sent to an AI service and
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
+| `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |
+| `scripts/edit-claim.ts` | Try the editor on a submitted form's lines. It prints the form before and after; it doesn't change the PDF yet. |
 | `scripts/compare-register.ts` | Compares, per SI Leader, the SI session hours the rules give from the register with the hours on their submitted form. Also checks the rate from their debrief level against the rate on their form, and lists days that are in the register but not the debrief, and the reverse. |
 
 Real data (exports, submitted forms, generated PDFs) is never stored in this
