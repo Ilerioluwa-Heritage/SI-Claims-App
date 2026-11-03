@@ -22,6 +22,8 @@ export interface KeptList {
 interface Kept {
   claimForm: KeptFile;
   levels: KeptList;
+  /** Other spelling of a name -> the name as it is on the list. */
+  aliases: Record<string, string>;
 }
 
 const DB = 'si-claims';

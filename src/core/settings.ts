@@ -104,6 +104,11 @@ export interface Settings {
   listLevels: Record<string, Level>;
   /** The administrators (rule 9). Keep this list and their levels up to date here. */
   admins: Admin[];
+  /**
+   * Other spellings of a name, and the name as it is on the SI list (or the
+   * administrators' list). The website starts from these and lets them be edited.
+   */
+  aliases: Record<string, string>;
 
   // Fixed text on the HRM-05.
   schoolName: string;
@@ -207,6 +212,11 @@ export const DEFAULT_SETTINGS: Settings = {
     { name: 'NETHENGWE R', level: '' },
     { name: 'OSOFEKUN SI', level: '' },
   ],
+  // SI Administrator, 3 Nov 2026: the same people as on the SI list.
+  aliases: {
+    'KHOROMBI NB': 'KHOROMBI BN',
+    'PHOSHOKO PM': 'PHOSHOKO P',
+  },
 
   schoolName: 'CAE (SI)',
   costCentreNo: 'G082',

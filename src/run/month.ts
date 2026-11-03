@@ -103,10 +103,19 @@ export function levelFromList(text: string, settings: Settings): Level | null {
   return LEVELS.find((l) => plainHeading(l) === key) ?? listed ?? levelOf(text, settings);
 }
 
-/** The people the month is matched against: the list of SI Leaders, plus the administrators from the settings. */
-export function rosterWithAdmins(list: RosterPerson[], settings: Settings): RosterPerson[] {
+/**
+ * The people the month is matched against: the list of SI Leaders plus the
+ * administrators from the settings, each with their other spellings
+ * (`aliases`: other spelling -> name as on the list; the settings' by default).
+ */
+export function rosterWithAdmins(list: RosterPerson[], settings: Settings, aliases: Record<string, string> = settings.aliases): RosterPerson[] {
   const admins = settings.admins.map((a): RosterPerson => ({ ...splitName(a.name), formName: a.name, level: a.level, active: true, role: 'Admin', aliases: [] }));
-  return [...list, ...admins];
+  const roster = [...list, ...admins].map((p) => ({ ...p, aliases: [...p.aliases] }));
+  for (const [spelling, name] of Object.entries(aliases)) {
+    const person = roster.find((p) => normaliseName(p.formName) === normaliseName(name));
+    if (person) person.aliases.push(spelling);
+  }
+  return roster;
 }
 
 /** The control list's rows: everyone with something to claim. */
@@ -152,14 +161,14 @@ export function runMonth(input: MonthInputs, settings: Settings): MonthResult {
     if (given.length && levels.size === 1 && !levels.has(null)) person.level = given[0]!;
   }
 
-  // Every name in the sources, matched to the list once.
+  // Every name in the sources, matched to the list once ("Sample DC" and "SAMPLE DC" are one name).
   const matches = new Map<string, MatchResult>();
   const match = (name: string) => {
-    let m = matches.get(name);
+    let m = matches.get(normaliseName(name));
     if (!m) {
       m = matchName(name, roster);
-      matches.set(name, m);
-      if (m.matched && m.how !== 'exact') add('names', m.person.formName, `"${name}" was matched to ${m.person.formName} (${m.how === 'alias' ? 'an alias on the list' : 'one letter different'}).`);
+      matches.set(normaliseName(name), m);
+      if (m.matched && m.how !== 'exact') add('names', m.person.formName, `"${name}" was matched to ${m.person.formName} (${m.how === 'alias' ? 'a known other spelling' : 'one letter different'}).`);
     }
     return m;
   };

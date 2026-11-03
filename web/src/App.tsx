@@ -43,6 +43,9 @@ export function App() {
   const [claimFormProblems, setClaimFormProblems] = useState<string[]>([]);
   const [levels, setLevels] = useState<KeptList | null>(null);
   const [levelsError, setLevelsError] = useState('');
+  const [aliases, setAliases] = useState<Record<string, string>>(S.aliases);
+  const [newSpelling, setNewSpelling] = useState('');
+  const [newSpellingOf, setNewSpellingOf] = useState('');
   const [register, setRegister] = useState<Picked | null>(null);
   const [debrief, setDebrief] = useState<Picked | null>(null);
   const [classFiles, setClassFiles] = useState<Picked[]>([]);
@@ -54,10 +57,11 @@ export function App() {
   const [editing, setEditing] = useState<FormFile | null>(null);
 
   useEffect(() => {
-    Promise.all([getKept('claimForm'), getKept('levels')])
-      .then(([form, list]) => {
+    Promise.all([getKept('claimForm'), getKept('levels'), getKept('aliases')])
+      .then(([form, list, kept]) => {
         setClaimForm(form ?? null);
         setLevels(list ?? null);
+        if (kept) setAliases(kept);
       })
       .catch(() => setError("This browser won't let the app keep files, so they'll have to be uploaded each time."));
   }, []);
@@ -74,6 +78,13 @@ export function App() {
     } catch (e) {
       setLevelsError((e as Error).message);
     }
+  }
+
+  /** Other spellings of names: kept on this device once changed, starting from the settings' list. */
+  function keepAliases(next: Record<string, string>) {
+    setAliases(next);
+    startOver();
+    void setKept('aliases', next).catch(() => setError("The spelling is ready to use, but this browser wouldn't keep it for next time."));
   }
 
   async function removeLevels() {
@@ -159,7 +170,7 @@ export function App() {
         register: registerRows.rows,
         debrief: debriefRows.rows,
         classes: classesOk.flatMap((f) => f.classes),
-        roster: rosterWithAdmins(levels.people, S),
+        roster: rosterWithAdmins(levels.people, S, aliases),
       },
       S,
     );
@@ -323,6 +334,51 @@ export function App() {
             </ul>
           )}
           {levelsError && <span className="bad">{levelsError}</span>}
+        </Slot>
+        <Slot title="Other spellings of names">
+          <span className="hint">When the register, debrief or class attendance writes a name differently from the list, say who it is here.</span>
+          {Object.keys(aliases).length > 0 && (
+            <ul className="files-read">
+              {Object.entries(aliases).map(([spelling, name]) => (
+                <li key={spelling}>
+                  "{spelling}" is {name}{' '}
+                  <button
+                    className="link"
+                    onClick={() => {
+                      const { [spelling]: _gone, ...rest } = aliases;
+                      keepAliases(rest);
+                    }}
+                  >
+                    Remove
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form
+            className="command"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const spelling = newSpelling.trim().toUpperCase().replace(/\s+/g, ' ');
+              if (!spelling || !newSpellingOf) return;
+              keepAliases({ ...aliases, [spelling]: newSpellingOf });
+              setNewSpelling('');
+              setNewSpellingOf('');
+            }}
+          >
+            <input aria-label="Other spelling" value={newSpelling} onChange={(e) => setNewSpelling(e.target.value)} placeholder="e.g. Mbunda YP" />
+            <select aria-label="Who it is" value={newSpellingOf} onChange={(e) => setNewSpellingOf(e.target.value)}>
+              <option value="">is…</option>
+              {[...(levels?.people.map((p) => p.formName) ?? []), ...S.admins.map((a) => a.name)].sort().map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+            <button type="submit" disabled={!newSpelling.trim() || !newSpellingOf}>
+              Add
+            </button>
+          </form>
         </Slot>
       </section>
 

@@ -71,7 +71,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
-4. **The SI list doesn't cover everyone who worked in October.** Until it's updated, people not on it get their name and level from the debrief (see Decided). That doesn't cover RAMOLOTO CB, who claims only classes and has no debrief, so their classes can't be matched. The list has KHOROMBI BN and PHOSHOKO P, while the register has KHOROMBI NB and PHOSHOKO PM. They may be the same people, but the app treats them as different until you say so.
+4. **The SI list doesn't cover everyone who worked in October.** Until it's updated, people not on it get their name and level from the debrief (see Decided). That doesn't cover RAMOLOTO CB, who claims only classes and has no debrief, so their classes can't be matched.
 5. **Administrators' levels.** They aren't on the SI list, so their rate is unknown until their levels are added to `admins` in `src/core/settings.ts`.
 
 ### Decided
@@ -87,6 +87,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
 - **Missing end times (2 Nov 2026).** If a register row has a start but no end time, the end time comes from that SI Leader's debrief for the same day and session. If the row has no time at all, both start and end come from the debrief. If there's no matching debrief, or it has no end time either, the row stays flagged and isn't claimed.
+- **Other spellings of names (3 Nov 2026).** "KHOROMBI NB" is KHOROMBI BN on the SI list, and "PHOSHOKO PM" is PHOSHOKO P. Their level and student number come from the list, and the form shows the name as it is on the list. You can add or remove other spellings on the website, under "Other spellings of names".
 - **People not on the SI list (3 Nov 2026).** Their name and level come from their debriefs for the month. The checks report says so, and their student number on the control list is blank. If their debriefs give different levels, there's no rate until it's settled.
 - **Levels not in the brief (3 Nov 2026).** PGD(NQF8) is paid as Honours (R47.00), and 1st year ECP as undergraduate (R36.50).
 - **Register vs debrief (3 Nov 2026).** The register wins. A register session with no debrief is claimed and goes on the side note; a debrief with no register session isn't claimed and is flagged. A session counts as the same if it's the same SI Leader, the same day, and starts within 30 minutes.

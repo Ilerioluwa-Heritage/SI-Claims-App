@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS as S, formatHours, formatRand, parseTime, type RosterPerson } from '../src/core/index.ts';
 import type { DebriefRow } from '../src/read/debrief.ts';
 import type { RegisterRow } from '../src/read/register.ts';
-import { CHECK_SECTIONS, controlListRows, runMonth, type LecturerClass, type MonthResult } from '../src/run/month.ts';
+import { CHECK_SECTIONS, controlListRows, rosterWithAdmins, runMonth, type LecturerClass, type MonthResult } from '../src/run/month.ts';
 
 // A made-up month. No real names.
 const t = (s: string) => parseTime(s)!;
@@ -123,6 +123,32 @@ describe('one month, start to finish (made-up data)', () => {
 
   it('never puts a student number in the checks report', () => {
     expect(JSON.stringify(m.checks)).not.toContain('200000001');
+  });
+});
+
+describe('other spellings of a name (aliases)', () => {
+  const run = (aliases: Record<string, string>) =>
+    runMonth(
+      {
+        month: 10,
+        year: 2026,
+        roster: rosterWithAdmins([{ ...person('SAMPLE', 'CD', 'Honours'), studentNumber: '200000002' }], { ...S, admins: [] }, aliases),
+        register: [reg(day(6), 'Sample DC', '18:00', '19:00')],
+        debrief: [deb(day(6), 'SAMPLE DC', '18:00', '19:00', 'Level 3 (Third Year)')],
+        classes: [],
+      },
+      S,
+    );
+
+  it('matches the other spelling to the person on the list, with their level and student number', () => {
+    const m = run({ 'SAMPLE DC': 'SAMPLE CD' });
+    expect(m.people.map((p) => `${p.person.formName} ${formatRand(p.amountCents!)}`)).toEqual(['SAMPLE CD R235.00']); // 5h x R47.00 (Honours, from the list)
+    expect(controlListRows(m)[0]!.studentNumber).toBe('200000002');
+    expect(m.checks.filter((c) => c.section === 'names').map((c) => c.message)).toEqual(['"Sample DC" was matched to SAMPLE CD (a known other spelling).']);
+  });
+
+  it('without it, the other spelling is someone else, taken from the debrief', () => {
+    expect(run({}).people.map((p) => p.person.formName)).toEqual(['SAMPLE DC']);
   });
 });
 

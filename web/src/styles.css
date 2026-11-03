@@ -57,6 +57,8 @@ ul.files-read { margin: 0; padding-left: 18px; }
 .tabs button.on { background: var(--accent); color: var(--accent-ink); }
 [hidden] { display: none !important; }
 form.command { display: flex; gap: 8px; }
+form.command { flex-wrap: wrap; }
+form.command select { font: inherit; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; max-width: 100%; }
 form.command input { flex: 1; min-width: 0; font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; }
 pre.bad { white-space: pre-wrap; font: inherit; }
 .preview { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
