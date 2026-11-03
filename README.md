@@ -37,7 +37,7 @@ identical results.
 | Stage | What | Status |
 |---|---|---|
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
-| 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. More than 13 lines continue on a second copy of the form, saved as its own file. |
+| 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. There's only ever one form per person. |
 | 3 | Website: upload, checks, downloads, control list | Not started |
 | 4 | Claim form editor (see below) | Not started |
 | 5 | Installing on phones | Not started |
@@ -67,6 +67,9 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 
 ### Decided
 
+- **Fitting the form (3 Nov 2026).** There's never a second form. With more than 13 lines, class lines with the same times are combined into one line first. If that's still too many, SI session lines with the same times are combined as well. If even that doesn't fit, no form is filled and it's flagged for your decision (e.g. in the editor). No line is ever dropped.
+- **Two classes on one day (3 Nov 2026)** keep sharing a line (`07H40/14H00`), even though the form's TIME OUT box cuts off the second time at the form's own font size. The checks report flags it.
+
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
 - **Missing end times (2 Nov 2026).** If a register row has a start but no end time, the end time comes from that SI Leader's debrief for the same day and session. If the row has no time at all, both start and end come from the debrief. If there's no matching debrief, or it has no end time either, the row stays flagged and isn't claimed.
@@ -79,9 +82,9 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | Folder / file | What it is |
 |---|---|
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
-| `src/core/sources.ts` | The three files every run needs. |
+| `src/core/sources.ts` | The files the app works from: three uploaded every month, and two kept until replaced. |
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
-| `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. A claim with more than 13 lines continues on another untouched copy of the form, saved as `NAME (page 2).pdf`, showing the same totals. It also checks a newly uploaded form. |
+| `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. It fills one form per person. A claim with more than 13 lines, even after combining, is refused and reported. It also checks a newly uploaded form. |
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
@@ -123,7 +126,12 @@ You need Node.js and Git. They were installed on 2 November 2026.
    npm run demo
    ```
 
-6. **See filled claim forms.** This fills the HRM-05 for two made-up people and saves them in the `local-data` folder: `EXAMPLE AB.pdf` (one form) and `EXAMPLE CD.pdf` with `EXAMPLE CD (page 2).pdf` (15 lines, so two forms). Open them in your usual PDF reader. To try a different blank form, put its path after `--`, e.g. `npm run demo:pdf -- "C:\path\to\form.pdf"`:
+6. **See filled claim forms.** This fills the HRM-05 for made-up people and saves them in the `local-data` folder. Open them in your usual PDF reader.
+   - `EXAMPLE AB.pdf` is the demo month.
+   - `EXAMPLE CD.pdf` has 15 lines, so its four classes at the same time are combined into one line.
+   - EXAMPLE EF still has 15 lines after combining, so it gets no form and is reported instead.
+
+    To try a different blank form, put its path after `--`, e.g. `npm run demo:pdf -- "C:\path\to\form.pdf"`:
 
    ```
    npm run demo:pdf
@@ -146,4 +154,4 @@ Full details are in `src/core/rules.ts`, with a comment on every rule.
 8. The total is capped at 80 hours.
 9. Administrators are claimed at 80 hours.
 10. Money = hours × rate, rounded half-up to the cent, using exact arithmetic.
-11. With more than 13 lines, lines with the same service and times are combined (`10&14&17/09/2026`). Anything still left over goes onto a second page.
+11. The form has 13 lines and there's never a second form. With more lines, class lines with the same times are combined first (`10&14&17/09/2026`), then SI session lines with the same times if needed. If it still doesn't fit, it's flagged for your decision.

@@ -1,6 +1,9 @@
-// Fills the HRM-05 for two made-up SI Leaders, so you can open the result:
-//   EXAMPLE AB - the month from `npm run demo` (one form)
-//   EXAMPLE CD - 15 sessions that can't be combined (continues on a second form)
+// Fills the HRM-05 for made-up SI Leaders, so you can open the result:
+//   EXAMPLE AB - the month from `npm run demo`
+//   EXAMPLE CD - 11 sessions and 4 classes at the same time: 15 lines, so the
+//                classes are combined into one line and it fits on the form
+//   EXAMPLE EF - 15 sessions at different times: even combining can't fit it,
+//                so no form is filled and it's reported for your decision
 // Run it with:  npm run demo:pdf  [-- "<blank form.pdf>"]
 // The blank form defaults to the test copy. The files go to local-data/ (never uploaded).
 
@@ -9,7 +12,10 @@ import { DEFAULT_SETTINGS as S, buildSilClaim, formatRand, parseRand, parseTime,
 import { checkClaimForm, fillClaimForm, firstOfNextMonth } from '../src/pdf/fill.ts';
 
 const t = (s: string) => parseTime(s) ?? 0;
-const at = (minutes: number) => `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, '0')}`;
+const day = (d: number) => `2026-10-${String(d).padStart(2, '0')}`;
+/** n sessions, each starting half an hour later than the one before, so no two lines match. */
+const staggered = (n: number): SiSession[] => Array.from({ length: n }, (_, i) => ({ date: day(i + 1), start: 420 + i * 30, end: 480 + i * 30 }));
+
 const examples: { formName: string; sessions: SiSession[]; classes: ClassRecord[] }[] = [
   {
     formName: 'EXAMPLE AB',
@@ -27,9 +33,10 @@ const examples: { formName: string; sessions: SiSession[]; classes: ClassRecord[
   },
   {
     formName: 'EXAMPLE CD',
-    sessions: Array.from({ length: 15 }, (_, i) => ({ date: `2026-10-${String(i + 1).padStart(2, '0')}`, start: t(at(420 + i * 30)), end: t(at(480 + i * 30)) })),
-    classes: [],
+    sessions: staggered(11),
+    classes: [12, 13, 14, 15].map((d) => ({ date: day(d), module: 'MATH101', start: t('11:10') })),
   },
+  { formName: 'EXAMPLE EF', sessions: staggered(15), classes: [] },
 ];
 
 const templatePath = process.argv[2] ?? 'tests/fixtures/HRM-05 blank.pdf';
@@ -42,21 +49,27 @@ if (problems.length) {
 mkdirSync('local-data', { recursive: true });
 for (const e of examples) {
   const claim = buildSilClaim({ sessions: e.sessions, classes: e.classes, rateCents: parseRand('36.50') }, S);
-  const filled = await fillClaimForm(
-    template,
-    {
-      formName: e.formName,
-      month: 10,
-      year: 2026,
-      submissionDate: firstOfNextMonth(10, 2026),
-      pages: claim.pages,
-      totalMinutes: claim.totalMinutes,
-      rateCents: claim.rateCents,
-      amountCents: claim.amountCents,
-    },
-    S,
-  );
-  for (const f of filled.files) writeFileSync(`local-data/${f.fileName}`, f.bytes);
-  console.log(`${e.formName}: ${claim.rows.length} lines, ${claim.totalMinutes / 60}h, ${formatRand(claim.amountCents)} -> ${filled.files.map((f) => `local-data/${f.fileName}`).join(', ')}`);
-  for (const w of filled.warnings) console.log(`  ! ${w}`);
+  console.log(`${e.formName}: ${claim.rows.length} lines, ${claim.totalMinutes / 60}h, ${formatRand(claim.amountCents)}`);
+  for (const n of claim.notes.filter((n) => n.kind === 'combined' || n.kind === 'too-many-lines')) console.log(`  - ${n.message}`);
+  try {
+    const filled = await fillClaimForm(
+      template,
+      {
+        formName: e.formName,
+        month: 10,
+        year: 2026,
+        submissionDate: firstOfNextMonth(10, 2026),
+        rows: claim.rows,
+        totalMinutes: claim.totalMinutes,
+        rateCents: claim.rateCents,
+        amountCents: claim.amountCents,
+      },
+      S,
+    );
+    writeFileSync(`local-data/${filled.fileName}`, filled.bytes);
+    console.log(`  -> local-data/${filled.fileName}`);
+    for (const w of filled.warnings) console.log(`  ! ${w}`);
+  } catch (err) {
+    console.log(`  ! No form filled: ${(err as Error).message}`);
+  }
 }

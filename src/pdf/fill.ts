@@ -12,7 +12,7 @@
 // student number, address, bank, account, branch, signatures, the approver
 // row and the signature/date boxes are left blank and fillable.
 //
-// Works from the form's bytes and returns the filled files' bytes, so the
+// Works from the form's bytes and returns the filled file's bytes, so the
 // website, the phone app and the tests share it. Nothing is written to disk.
 
 import {
@@ -100,16 +100,17 @@ export interface FormContent {
   year: number;
   /** "YYYY-MM-DD"; usually the 1st of the next month (see firstOfNextMonth). */
   submissionDate: string;
-  /** The lines, already split into pages of at most 13. */
-  pages: ClaimRow[][];
+  /** The lines, in form order: at most 13 (combine first; there is never a second form). */
+  rows: ClaimRow[];
   totalMinutes: number;
   rateCents: number;
   amountCents: number;
 }
 
 export interface FilledForm {
-  /** One file per page: "MABUNDA YP.pdf", then "MABUNDA YP (page 2).pdf" if the lines don't fit on one. */
-  files: { fileName: string; bytes: Uint8Array }[];
+  /** "MABUNDA YP.pdf" */
+  fileName: string;
+  bytes: Uint8Array;
   /** For the checks report, e.g. a value too wide for its box. */
   warnings: string[];
 }
@@ -307,7 +308,7 @@ async function fillOne(template: Uint8Array, values: Map<string, string>): Promi
   return { bytes: appendUpdate(template, context, changed), tooWide: [...tooWide] };
 }
 
-/** What goes in each field for one page of the claim. */
+/** What goes in each field. */
 function valuesFor(content: FormContent, lines: ClaimRow[], settings: Settings): Map<string, string> {
   const values = new Map<string, string>([
     [HEADER.name, content.formName],
@@ -338,27 +339,22 @@ function valuesFor(content: FormContent, lines: ClaimRow[], settings: Settings):
 }
 
 /**
- * The filled form for one person. Up to 13 lines fit on the form. More lines
- * go on another, untouched copy of the form in a second file (renaming its
- * fields to join the two into one file would change the form). Every copy
- * shows the claim's totals.
+ * The filled form for one person: one form, never a second one (SI
+ * Administrator, 3 Nov 2026). A claim with more lines than the form holds,
+ * even after combining, is refused; it needs the administrator's decision.
  */
 export async function fillClaimForm(template: Uint8Array, content: FormContent, settings: Settings): Promise<FilledForm> {
-  if (content.pages.some((p) => p.length > settings.rowsPerPage)) throw new Error(`A page can hold at most ${settings.rowsPerPage} lines.`);
-  const pages = content.pages.length ? content.pages : [[]];
-  const files: FilledForm['files'] = [];
-  const warnings: string[] = [];
-  for (let i = 0; i < pages.length; i++) {
-    const values = valuesFor(content, pages[i]!, settings);
-    const { bytes, tooWide } = await fillOne(template, values);
-    const fileName = formFileName(i === 0 ? content.formName : `${content.formName} (page ${i + 1})`);
-    files.push({ fileName, bytes });
-    for (const name of tooWide) {
-      warnings.push(`${fileName}: the ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`);
-    }
+  if (content.rows.length > settings.rowsPerPage) {
+    throw new Error(
+      `${content.formName}'s claim has ${content.rows.length} lines, even after combining lines with the same times; the form holds ${settings.rowsPerPage}. ` +
+        'Decide which lines to change (for example in the claim form editor) before filling the form.',
+    );
   }
-  if (pages.length > 1) warnings.unshift(`${content.formName} has more lines than one form holds, so the claim continues on ${pages.length - 1} more form${pages.length > 2 ? 's' : ''}.`);
-  return { files, warnings };
+  const values = valuesFor(content, content.rows, settings);
+  const { bytes, tooWide } = await fillOne(template, values);
+  const fileName = formFileName(content.formName);
+  const warnings = tooWide.map((name) => `${fileName}: the ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`);
+  return { fileName, bytes, warnings };
 }
 
 // ---------------------------------------------------------------------------

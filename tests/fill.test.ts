@@ -17,7 +17,7 @@ function content(sessions: SiSession[], classes: { date: string; module: string;
     month: 10,
     year: 2026,
     submissionDate: firstOfNextMonth(10, 2026),
-    pages: claim.pages,
+    rows: claim.rows,
     totalMinutes: claim.totalMinutes,
     rateCents: claim.rateCents,
     amountCents: claim.amountCents,
@@ -63,8 +63,8 @@ describe('filling the HRM-05 without changing the form', () => {
       [{ date: '2026-10-06', module: 'MATH101', start: t('07:40') }, { date: '2026-10-06', module: 'STAT102', start: t('14:00') }],
     );
     const result = await fillClaimForm(TEMPLATE, month, S);
-    expect(result.files.map((f) => f.fileName)).toEqual(['EXAMPLE AB.pdf']);
-    bytes = result.files[0]!.bytes;
+    expect(result.fileName).toBe('EXAMPLE AB.pdf');
+    bytes = result.bytes;
     warnings = result.warnings;
     [blank, filled] = await Promise.all([describeForm(TEMPLATE), describeForm(bytes)]);
   }, SLOW);
@@ -145,37 +145,26 @@ describe('filling the HRM-05 without changing the form', () => {
   });
 });
 
-describe('values that do not fit, and claims longer than one form', () => {
+describe('values that do not fit, and claims longer than the form', () => {
   it('reports a value too wide for its box, and keeps the form\'s font size', async () => {
     const long = content([session(7, '18:00', '20:00')]);
-    long.pages = [[{ dates: ['2026-10-07', '2026-10-08', '2026-10-21'], service: 'SI SESSION', timeIn: '18H00', timeOut: '22H00', minutes: 720 }]];
+    long.rows = [{ dates: ['2026-10-07', '2026-10-08', '2026-10-21'], service: 'SI SESSION', timeIn: '18H00', timeOut: '22H00', minutes: 720 }];
     const result = await fillClaimForm(TEMPLATE, long, S);
     expect(result.warnings).toEqual([
       'EXAMPLE AB.pdf: the line 1 date "07&08&21/10/2026" is wider than its box at the form\'s own font size, so part of it may be cut off.',
     ]);
-    const after = await describeForm(result.files[0]!.bytes);
+    const after = await describeForm(result.bytes);
     // The form's own setting, "/Cambria 10 Tf 0 g", exactly as it was (PDF escapes and all).
     expect(after.fields.get('DATE2')!.widgets[0]!.box[1]).toBe('\\057Cambria\\04010\\040Tf\\0400\\040g');
   }, SLOW);
 
-  it('continues on another untouched copy of the form, in its own file, with the same totals', async () => {
+  it('never makes a second form: a claim still over 13 lines after combining is refused', async () => {
     const at = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
     const c = content(Array.from({ length: 15 }, (_, i) => session(i + 1, at(7 * 60 + i * 30), at(8 * 60 + i * 30))));
-    expect(c.pages.map((p) => p.length)).toEqual([13, 2]);
-    const result = await fillClaimForm(TEMPLATE, c, S);
-    expect(result.files.map((f) => f.fileName)).toEqual(['EXAMPLE AB.pdf', 'EXAMPLE AB (page 2).pdf']);
-    expect(result.warnings).toEqual(['EXAMPLE AB has more lines than one form holds, so the claim continues on 1 more form.']);
-    const [one, two] = await Promise.all(result.files.map((f) => describeForm(f.bytes)));
-    for (const f of result.files) expect(Buffer.from(f.bytes.subarray(0, TEMPLATE.length)).equals(Buffer.from(TEMPLATE))).toBe(true);
-    expect([...two!.fields.keys()]).toEqual([...one!.fields.keys()]);
-    expect([one!.value('DATE2'), one!.value('DATE14'), two!.value('DATE2'), two!.value('DATE3'), two!.value('DATE4')]).toEqual(['01/10/2026', '13/10/2026', '14/10/2026', '15/10/2026', '']);
-    expect([one!.value('Textfield8'), two!.value('Textfield8'), two!.value('NAME_AND_SURNAME0')]).toEqual([one!.value('Textfield8'), one!.value('Textfield8'), 'EXAMPLE AB']);
-  }, SLOW);
-
-  it('refuses a page with more lines than the form holds', async () => {
-    const c = content([session(1, '14:00', '15:00')]);
-    c.pages = [Array.from({ length: 14 }, () => c.pages[0]![0]!)];
-    await expect(fillClaimForm(TEMPLATE, c, S)).rejects.toThrow('A page can hold at most 13 lines.');
+    expect(c.rows).toHaveLength(15);
+    await expect(fillClaimForm(TEMPLATE, c, S)).rejects.toThrow(
+      "EXAMPLE AB's claim has 15 lines, even after combining lines with the same times; the form holds 13. Decide which lines to change (for example in the claim form editor) before filling the form.",
+    );
   });
 });
 

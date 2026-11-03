@@ -7,7 +7,7 @@
 import { parseCommand, type Command, type Target } from './commands.ts';
 import { MONTH_NAMES, isoDate, monthNumber } from './dates.ts';
 import { amountCents, formatHours, formatRand, parseRand } from './money.ts';
-import { combineRows, dataAllowanceHours, formatDates, paginate, workSession, type ClaimRow, type Note, type Service } from './rules.ts';
+import { combineRows, dataAllowanceHours, formatDates, workSession, type ClaimRow, type Note, type Service } from './rules.ts';
 import type { Settings } from './settings.ts';
 import { formatTime, parseTime } from './time.ts';
 
@@ -23,7 +23,8 @@ export interface EditableClaim {
 export interface Recalculated {
   /** Lines in form order: SI sessions then classes, by date; combined if more than fit. */
   rows: ClaimRow[];
-  pages: ClaimRow[][];
+  /** False if there are still more lines than the form holds; the warnings say so. */
+  fitsOnForm: boolean;
   uncappedMinutes: number;
   /** After the monthly cap. */
   totalMinutes: number;
@@ -116,7 +117,7 @@ export function recalculate(claim: EditableClaim, settings: Settings): Recalcula
 
   return {
     rows,
-    pages: paginate(rows, settings.rowsPerPage),
+    fitsOnForm: rows.length <= settings.rowsPerPage,
     uncappedMinutes,
     totalMinutes,
     capped,
