@@ -8,9 +8,10 @@ import { makeDownloads, type Downloads } from '../../src/app/downloads.ts';
 import { DEFAULT_SETTINGS as S, MONTH_NAMES, SOURCE_NAMES, missingSources } from '../../src/core/index.ts';
 import { checkClaimForm } from '../../src/pdf/fill.ts';
 import { readDebrief, type DebriefRow } from '../../src/read/debrief.ts';
+import { readClassAttendance, type ClassFile } from '../../src/read/class-attendance.ts';
 import { readLevelsList } from '../../src/read/levels-list.ts';
 import { readRegister, type RegisterRow } from '../../src/read/register.ts';
-import { levelFromList, runMonth, type MonthResult } from '../../src/run/month.ts';
+import { levelFromList, rosterWithAdmins, runMonth, type Check } from '../../src/run/month.ts';
 import { Editor, type FormFile } from './Editor.tsx';
 import { Results, type Run } from './Results.tsx';
 import { bytesOf } from './save.ts';
@@ -44,6 +45,7 @@ export function App() {
   const [levelsError, setLevelsError] = useState('');
   const [register, setRegister] = useState<Picked | null>(null);
   const [debrief, setDebrief] = useState<Picked | null>(null);
+  const [classFiles, setClassFiles] = useState<Picked[]>([]);
   const [run, setRun] = useState<Run | null>(null);
   const [downloads, setDownloads] = useState<Downloads | null>(null);
   const [busy, setBusy] = useState('');
@@ -86,8 +88,26 @@ export function App() {
     () => (register ? attempt<RegisterRow>(() => readRegister(register.bytes, S, debriefRows && 'rows' in debriefRows ? debriefRows.rows : [])) : null),
     [register, debriefRows],
   );
+  const classesRead = useMemo(
+    () =>
+      classFiles.map((f): ClassFile | { fileName: string; error: string } => {
+        try {
+          return readClassAttendance(f.bytes, f.fileName, S);
+        } catch (e) {
+          return { fileName: f.fileName, error: (e as Error).message };
+        }
+      }),
+    [classFiles],
+  );
+  const classesOk = classesRead.filter((c): c is ClassFile => 'classes' in c);
   const readOk = (r: Read<unknown> | null) => (r && 'rows' in r ? r : undefined);
-  const missing = missingSources({ claimForm: claimForm ?? undefined, levels: levels ?? undefined, register: readOk(registerRows), debrief: readOk(debriefRows) });
+  const missing = missingSources({
+    claimForm: claimForm ?? undefined,
+    levels: levels ?? undefined,
+    register: readOk(registerRows),
+    debrief: readOk(debriefRows),
+    classAttendance: classesOk.length ? classesOk : undefined,
+  });
   const noRate = levels ? levels.people.filter((p) => !levelFromList(p.level, S)).length : 0;
   const prefix = `${period.year}-${String(period.month).padStart(2, '0')}-`;
   const label = `${monthName(period.month)} ${period.year}`;
@@ -128,6 +148,31 @@ export function App() {
         await keepClaimForm('HRM-05 blank.pdf (test copy)', new Uint8Array(await (await fetch(url)).arrayBuffer()));
       }
     : null;
+
+  /** The real run: everything uploaded, through the rules. */
+  function checkMonth() {
+    if (missing.length || !levels || !registerRows || !debriefRows || !('rows' in registerRows) || !('rows' in debriefRows)) return;
+    const result = runMonth(
+      {
+        month: period.month,
+        year: period.year,
+        register: registerRows.rows,
+        debrief: debriefRows.rows,
+        classes: classesOk.flatMap((f) => f.classes),
+        roster: rosterWithAdmins(levels.people, S),
+      },
+      S,
+    );
+    // What the files themselves couldn't settle goes into the checks too.
+    const fileChecks: Check[] = [
+      ...levels.problems.map((message): Check => ({ section: 'names', person: null, message: `SI list, ${message}` })),
+      ...classesOk.flatMap((f) => f.problems.map((message): Check => ({ section: 'classes', person: f.name, message }))),
+      ...classesOk.filter((f) => f.nameFrom === 'file name').map((f): Check => ({ section: 'classes', person: f.name, message: `${f.fileName}: the SI Leader's name was taken from the file's name.` })),
+    ];
+    setDownloads(null);
+    setError('');
+    setRun({ result: { ...result, checks: [...fileChecks, ...result.checks] }, demo: false, month: period.month, year: period.year });
+  }
 
   function tryMadeUpMonth() {
     const input = demoMonth();
@@ -306,8 +351,47 @@ export function App() {
             }}
           />
         </Slot>
-        <Slot title={SOURCE_NAMES.classAttendance}>
-          <span className="waiting">Not set up yet: send a sample of the lecturers' file, so the app can learn its columns.</span>
+        <Slot title={`${SOURCE_NAMES.classAttendance} (Excel, one per SI Leader)`}>
+          {classesRead.length > 0 && (
+            <ul className="files-read">
+              {classesRead.map((f) => (
+                <li key={f.fileName}>
+                  {f.fileName}:{' '}
+                  {'error' in f ? (
+                    <span className="bad">{f.error}</span>
+                  ) : (
+                    <span className={f.problems.length ? 'bad' : 'ok'}>
+                      {f.name ?? 'no SI Leader name'}, {f.classes.filter((c) => c.date.startsWith(prefix)).length} classes in {label}
+                      {f.problems.length > 0 && ` (${f.problems.length} to look at)`}
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="buttons">
+            <PickMany
+              label={classFiles.length ? 'Add more files' : 'Upload the class attendance (.xlsx)'}
+              accept=".xlsx"
+              onPick={async (files) => {
+                const picked = await Promise.all(files.map(async (f) => ({ fileName: f.name, bytes: await bytesOf(f) })));
+                setClassFiles((now) => [...now.filter((x) => !picked.some((p) => p.fileName === x.fileName)), ...picked]);
+                startOver();
+              }}
+            />
+            {classFiles.length > 0 && (
+              <button
+                className="secondary"
+                onClick={() => {
+                  setClassFiles([]);
+                  startOver();
+                }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <span className="hint">Only the lecturers' rows are counted. The email, student number and lecturer's name are never read.</span>
         </Slot>
       </section>
 
@@ -315,7 +399,9 @@ export function App() {
         <h2>4. Check the month</h2>
         {missing.length > 0 && <p className="hint">Still needed: {missing.map((s) => SOURCE_NAMES[s]).join(', ')}.</p>}
         <div className="buttons">
-          <button disabled={missing.length > 0}>Check {label}</button>
+          <button disabled={missing.length > 0} onClick={checkMonth}>
+            Check {label}
+          </button>
           <button className="secondary" onClick={tryMadeUpMonth}>
             Try it with made-up data
           </button>
@@ -363,6 +449,25 @@ function Pick({ label, accept, onPick }: { label: string; accept: string; onPick
           const file = e.target.files?.[0];
           e.target.value = '';
           if (file) void onPick(file);
+        }}
+      />
+    </label>
+  );
+}
+
+function PickMany({ label, accept, onPick }: { label: string; accept: string; onPick: (files: File[]) => void | Promise<void> }) {
+  return (
+    <label className="button">
+      {label}
+      <input
+        type="file"
+        accept={accept}
+        multiple
+        hidden
+        onChange={(e) => {
+          const files = [...(e.target.files ?? [])];
+          e.target.value = '';
+          if (files.length) void onPick(files);
         }}
       />
     </label>

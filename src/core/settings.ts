@@ -32,6 +32,20 @@ export interface LevelsListColumns {
   level: string;
 }
 
+/**
+ * Column headings in a class attendance export (one per SI Leader), by meaning.
+ * Only these columns are ever read: never the email, student number or lecturer's name.
+ */
+export interface ClassColumns {
+  /** "I am:": who answered, the SI Leader or the lecturer. */
+  role: string;
+  /** The SI Leader's name, on their own rows; it says whose file this is. */
+  name: string;
+  date: string;
+  module: string;
+  start: string;
+}
+
 /** An administrator, claimed at a fixed number of hours (rule 9). Not on the list of SI Leaders. */
 export interface Admin {
   /** As printed on the form, e.g. "OSOFEKUN SI". */
@@ -83,6 +97,9 @@ export interface Settings {
   /** Each answer to the debrief's level question, and the level of study (so the rate) it means. */
   debriefLevels: Record<string, Level>;
   levelsListColumns: LevelsListColumns;
+  classColumns: ClassColumns;
+  /** The answer to "I am:" on the lecturer's rows; only those rows are counted (rule 6). */
+  lecturerAnswer: string;
   /** Each level as written on the list of SI Leaders, and the level of study (so the rate) it means. */
   listLevels: Record<string, Level>;
   /** The administrators (rule 9). Keep this list and their levels up to date here. */
@@ -161,6 +178,14 @@ export const DEFAULT_SETTINGS: Settings = {
     studentNumber: 'Student #',
     level: 'Level of Study',
   },
+  classColumns: {
+    role: 'I am:',
+    name: 'Name & Surname:',
+    date: 'Date of Lecture:',
+    module: 'Module/Course:',
+    start: 'Lecture Time:',
+  },
+  lecturerAnswer: 'A lecturer',
   listLevels: {
     '1st ECP': '1st year ECP',
     '2nd': '2nd year',

@@ -3,7 +3,7 @@
 // files, so the website, the phone app and the tests all share it.
 
 import { amountCents, formatHours, formatRand, parseRand } from '../core/money.ts';
-import { matchName, splitName, type MatchResult, type RosterPerson } from '../core/names.ts';
+import { matchName, normaliseName, splitName, type MatchResult, type RosterPerson } from '../core/names.ts';
 import { buildSilClaim, formatDates, type ClaimResult, type NoteKind } from '../core/rules.ts';
 import { LEVELS, type Level, type Settings } from '../core/settings.ts';
 import { formatTime } from '../core/time.ts';
@@ -45,13 +45,13 @@ export const CHECK_SECTIONS = {
   levels: 'Levels and rates',
   'left-out': 'Register rows left out by their colour',
   filled: 'Times taken from the debrief',
-  names: 'Names matched by spelling or alias',
+  names: 'Names: spelling matches, and people not on the SI list',
   cap: 'Capped at the monthly limit',
   midnight: 'Time moved onto the start to finish by 23H30',
   'data-allowance': 'How the data allowance was spread',
   forms: 'Lines combined to fit the form, and second forms',
   'form-text': 'Text wider than its box on the form (cut off on screen and paper; the full text is in the box)',
-  classes: 'Class records counted once',
+  classes: 'Class attendance records',
   admins: 'Administrators',
 } as const;
 export type CheckSection = keyof typeof CHECK_SECTIONS;
@@ -128,12 +128,36 @@ export function runMonth(input: MonthInputs, settings: Settings): MonthResult {
   const inMonth = (date: string) => date.startsWith(prefix);
   const day = (date: string) => (date ? formatDates([date]) : 'no date');
 
+  // Someone not on the list: their name and level come from their debriefs this month (SI Administrator, 3 Nov 2026).
+  const roster = [...input.roster];
+  const fromDebrief = new Map<RosterPerson, Set<string>>();
+  for (const d of input.debrief) {
+    if (!d.date || !inMonth(d.date) || !d.name) continue;
+    const m = matchName(d.name, roster);
+    if (m.matched) {
+      fromDebrief.get(m.person)?.add(d.levelText);
+      continue;
+    }
+    // Not on the list, or on it with other initials. Two people it could be: leave it for the checks.
+    if (/more than one/.test(m.reason)) continue;
+    const { surname, initials } = splitName(d.name);
+    if (!surname) continue;
+    const person: RosterPerson = { surname, initials, formName: normaliseName(`${surname} ${initials}`), level: '', active: true, role: 'SIL', aliases: [] };
+    roster.push(person);
+    fromDebrief.set(person, new Set([d.levelText]));
+  }
+  for (const [person, answers] of fromDebrief) {
+    const given = [...answers].filter(Boolean);
+    const levels = new Set(given.map((t) => levelOf(t, settings)));
+    if (given.length && levels.size === 1 && !levels.has(null)) person.level = given[0]!;
+  }
+
   // Every name in the sources, matched to the list once.
   const matches = new Map<string, MatchResult>();
   const match = (name: string) => {
     let m = matches.get(name);
     if (!m) {
-      m = matchName(name, input.roster);
+      m = matchName(name, roster);
       matches.set(name, m);
       if (m.matched && m.how !== 'exact') add('names', m.person.formName, `"${name}" was matched to ${m.person.formName} (${m.how === 'alias' ? 'an alias on the list' : 'one letter different'}).`);
     }
@@ -179,11 +203,12 @@ export function runMonth(input: MonthInputs, settings: Settings): MonthResult {
   }
 
   const people: PersonResult[] = [];
-  for (const person of input.roster) {
+  for (const person of roster) {
     const w = work.get(person) ?? { rows: [], debrief: [], classes: [] };
     const who = person.formName;
     const level = levelFromList(person.level, settings);
     const rateCents = level ? parseRand(settings.rates[level]) : null;
+    const debriefAnswers = fromDebrief.get(person);
 
     if (person.role === 'Admin') {
       if (!person.active) continue;
@@ -224,7 +249,20 @@ export function runMonth(input: MonthInputs, settings: Settings): MonthResult {
     if (!sessions.length && !classes.length) continue;
 
     if (!person.active) add('names', who, 'is marked inactive on the list, but has sessions or classes this month.');
-    if (rateCents === null) add('levels', who, `The list gives the level as "${person.level || '(blank)'}", which isn't a level the rates know, so there's no rate.`);
+    if (debriefAnswers) {
+      const onList = input.roster.filter((p) => p.surname === person.surname).map((p) => p.formName);
+      add(
+        'names',
+        who,
+        `isn't on the SI list${onList.length ? ` (the list has ${onList.join(', ')})` : ''}, so the name and level come from the debrief, and the control list has no student number for them.`,
+      );
+    }
+    if (rateCents === null && debriefAnswers) {
+      const given = [...debriefAnswers].filter(Boolean);
+      add('levels', who, `Not on the SI list, and the debrief ${given.length ? `gives ${given.map((t) => `"${t}"`).join(' and ')}` : 'gives no level'}, so there's no rate.`);
+    } else if (rateCents === null) {
+      add('levels', who, `The list gives the level as "${person.level || '(blank)'}", which isn't a level the rates know, so there's no rate.`);
+    }
     const debriefLevels = [...new Set(w.debrief.map((d) => d.levelText).filter((t) => t && levelOf(t, settings) !== level))];
     if (level && debriefLevels.length) add('levels', who, `The debrief says ${debriefLevels.map((t) => `"${t}"`).join(' and ')}, but the list says ${level}. The list is used.`);
 

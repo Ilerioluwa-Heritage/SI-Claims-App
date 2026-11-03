@@ -125,3 +125,51 @@ describe('one month, start to finish (made-up data)', () => {
     expect(JSON.stringify(m.checks)).not.toContain('200000001');
   });
 });
+
+describe('people who are not on the SI list: name and level from the debrief (decided 3 Nov 2026)', () => {
+  const run = () =>
+    runMonth(
+      {
+        month: 10,
+        year: 2026,
+        roster: [{ ...person('SAMPLE', 'CD', 'Honours'), studentNumber: '200000002' }],
+        register: [
+          reg(day(5), 'Newcomer QR', '18:00', '19:00'),
+          reg(day(6), 'Sample XY', '18:00', '19:00'),
+          reg(day(7), 'Mixed ST', '18:00', '19:00'),
+          reg(day(8), 'Nobody ZZ', '18:00', '19:00'),
+        ],
+        debrief: [
+          deb(day(5), 'Newcomer QR', '18:00', '19:00', 'Masters'),
+          deb(day(6), 'Sample XY', '18:00', '19:00', 'Level 3 (Third Year)'),
+          deb(day(7), 'Mixed ST', '18:00', '19:00', 'Honours'),
+          deb(day(9), 'Mixed ST', '18:00', '19:00', 'Masters'),
+        ],
+        classes: [],
+      },
+      S,
+    );
+
+  it('claims them with the rate their debrief level gives, and no student number', () => {
+    const m = run();
+    expect(m.people.map((p) => `${p.person.formName} ${p.amountCents === null ? 'no rate' : formatRand(p.amountCents)}`)).toEqual([
+      'MIXED ST no rate',
+      'NEWCOMER QR R310.00', // 1h + 2h prep + 2h data = 5h x R62.00
+      'SAMPLE XY R182.50', // 5h x R36.50
+    ]);
+    expect(controlListRows(m).map((r) => r.studentNumber)).toEqual(['', '', '']);
+  });
+
+  it('says so in the checks, including when the list has someone with the same surname', () => {
+    const checks = run().checks.map((c) => `${c.section} ${c.person ?? '-'}: ${c.message}`);
+    expect(checks).toContain("names NEWCOMER QR: isn't on the SI list, so the name and level come from the debrief, and the control list has no student number for them.");
+    expect(checks).toContain("names SAMPLE XY: isn't on the SI list (the list has SAMPLE CD), so the name and level come from the debrief, and the control list has no student number for them.");
+    expect(checks).toContain('levels MIXED ST: Not on the SI list, and the debrief gives "Honours" and "Masters", so there\'s no rate.');
+  });
+
+  it('still cannot match a name that is on neither the list nor the debrief', () => {
+    expect(run().checks.filter((c) => c.section === 'unmatched').map((c) => c.message)).toEqual([
+      expect.stringContaining('"Nobody ZZ": not on the roster.'),
+    ]);
+  });
+});
