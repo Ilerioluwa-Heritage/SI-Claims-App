@@ -42,7 +42,7 @@ identical results.
 | 4 | Claim form editor (see below) | **Done (3 Nov 2026).** It's the "Claim form editor" tab on the website. |
 | 5 | Installing on phones | **Done (3 Nov 2026), ready to install once online.** The app has its icons, a manifest and an offline helper, and works without a connection once opened. Phones only install apps from sites online over HTTPS, so installing on a phone is tried in stage 7. |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
-| 7 | Putting it online | Not started |
+| 7 | Putting it online | **In progress (3 Nov 2026).** You chose Cloudflare Pages with Cloudflare Access (the sign-in and allow-list), updated through a private GitHub repository. The app is ready: it has its own sign-in check and browser rules. Next: you create the GitHub repository and the Cloudflare account (see "Putting it online"). |
 
 ### The claim form editor (stage 4)
 
@@ -105,7 +105,8 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
 | `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
 | `web/` | The website's screens, on one page that also works on a phone: month, kept files, this month's files, check, summary, checks, claim forms and downloads. Everything runs in your browser. Monthly files aren't kept; the blank form is kept on this device until you remove it. |
-| `web/public/` | What makes it installable: `manifest.webmanifest` (name, icons, opens full screen), `sw.js` (keeps the app's own files on the device so it works offline; never your uploads), and `icons/`. |
+| `web/public/` | What makes it installable: `manifest.webmanifest` (name, icons, opens full screen), `sw.js` (keeps the app's own files on the device so it works offline; never your uploads), and `icons/`. Also `_headers`: the browser rules for the online site. The page may only connect to its own site, so uploaded files can't be sent anywhere. |
+| `functions/_middleware.ts`, `src/gate/access.ts` | The online site's own sign-in check. Before Cloudflare sends any page or file, it checks that Cloudflare Access signed the visitor in. If Access is ever switched off or set up wrongly, the site stays closed. |
 | `src/app/` | What the website does behind the screens: make the downloads (forms, control list, checks report, and a zip of all of them), and save the editor's changed form. It also holds a made-up month for trying the website. |
 | `web/src/Editor.tsx` | The claim form editor's screen. |
 | `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
@@ -183,10 +184,113 @@ You need Node.js and Git. They were installed on 2 November 2026.
    npm run preview
    ```
 
-9. **Install it on a phone (once it's online, stage 7).** Phones only install apps from a site that is online over HTTPS. Open the site's address on the phone. On Android, tap **Install this app** at the top of the page, or Chrome's menu → **Install app**. On iPhone, open it in Safari, tap **Share**, then **Add to Home Screen**. It then opens from its icon, full screen, even without signal.
+9. **Install it on a phone (once it's online).** Phones only install apps from a site that is online over HTTPS (see "Putting it online"). Open the site's address on the phone and sign in. On Android, tap **Install this app** at the top of the page, or Chrome's menu → **Install app**. On iPhone, open it in Safari, tap **Share**, then **Add to Home Screen**. It then opens from its icon, full screen, even without signal.
 
 If a test fails, don't hand anything over. A failing test means a rule
 gives a different answer from what it should.
+
+If <http://localhost:5173> or <http://localhost:4173> won't open, the
+PowerShell window that ran `npm run dev` or `npm run preview` has probably
+been closed, or the command stopped with an error. Those addresses only work
+on this computer, and only while that window is open.
+
+## Putting it online (stage 7)
+
+What you end up with:
+
+- The website at an address like `https://ul-si-claims.pages.dev`. It works on any computer or phone, and installs on phones.
+- **Only the email addresses on your list can open it.** To sign in, someone types their email and Cloudflare emails them a code. An address that isn't on the list never gets a code. A sign-in lasts 24 hours on that device.
+- Everything still runs on the device. Uploaded files never go to Cloudflare or GitHub.
+- It's free. Cloudflare asks for a bank card while setting up the sign-in, but the free plan (up to 50 people) isn't charged.
+
+You do the sign-ups and anything that needs a password or card. Claude does
+the rest, and only uploads code to GitHub when you say so.
+
+### Part 1: GitHub (the code's backup, and how new versions go online)
+
+1. Go to <https://github.com> and sign in, or **Sign up**. Use an email the programme will keep, for example `cae.si.ul@gmail.com`, so the account isn't tied to one person.
+2. Top right, click **+** → **New repository**.
+3. Repository name: `si-claims-app`. Choose **Private**. Leave "Add README", ".gitignore" and "license" off. Click **Create repository**.
+4. Copy the address shown under "Quick setup" (it ends in `.git`) and give it to Claude. Claude connects this folder to it and uploads the code. The first time, a GitHub window opens asking you to sign in and allow it.
+
+### Part 2: Cloudflare Pages (the website)
+
+5. Go to <https://dash.cloudflare.com/sign-up> and create an account (the same email as GitHub is easiest). Confirm the email Cloudflare sends.
+6. In the left menu, click **Workers & Pages** → **Create application** → **Pages** → **Connect to Git**.
+7. Choose **GitHub** and sign in. When GitHub asks which repositories Cloudflare may see, choose **Only select repositories** → `si-claims-app` → **Install & Authorize**.
+8. Select `si-claims-app` → **Begin setup**, and fill in:
+   - **Project name:** `ul-si-claims`. This becomes the address, `https://ul-si-claims.pages.dev`. If it's taken, pick another and use that name wherever these steps say `ul-si-claims`.
+   - **Production branch:** `main`
+   - **Framework preset:** `None`
+   - **Build command:** `npm run build`
+   - **Build output directory:** `dist`
+
+   Click **Save and Deploy**. It takes a few minutes. Then click **Continue to project**.
+9. Open the address. It should say **"This site's sign-in isn't finished yet, so it stays closed."** That's right: the site stays closed until Part 3 is done.
+
+### Part 3: The sign-in and the allow-list (Cloudflare Zero Trust)
+
+10. In the Cloudflare dashboard's left menu, click **Zero Trust**.
+    - **Team name:** for example `ul-si`. Write it down; step 16 needs it.
+    - **Plan:** choose **Free**, enter the card details and finish. The free plan isn't charged.
+11. **Turn on the emailed codes.** In Zero Trust, go to **Integrations** → **Identity providers** → **Add new identity provider** → **One-time PIN** → **Save**. If One-time PIN is already listed, skip this step. (On older screens it's under **Settings** → **Authentication**.)
+12. **Put the sign-in in front of the site.** Go back to **Workers & Pages** → `ul-si-claims` → **Settings** → **General**, and click **Enable access policy**. This first protects only test versions of the site, so steps 13 and 14 extend it to the main address (Cloudflare's documented way).
+13. Next to the access policy, click **Manage**. Select the application, then **Configure** (or **Edit**). Under **Public hostname**, remove the `*` and the dot after it from the subdomain, so the address is exactly `ul-si-claims.pages.dev`. Change **Application name** to `SI Claim Forms` (this avoids a name-clash error), then **Save**.
+14. Go back to **Workers & Pages** → `ul-si-claims` → **Settings** → **General**, and click **Enable access policy** again, so test versions are covered too. In **Zero Trust** → **Access** → **Applications** there should now be two: `SI Claim Forms` for `ul-si-claims.pages.dev`, and one for `*.ul-si-claims.pages.dev`.
+15. **The allow-list.** In **Zero Trust** → **Access** → **Applications**, open `SI Claim Forms` → **Policies**, and edit its policy (or add one):
+    - **Policy name:** `SI administrators`
+    - **Action:** Allow
+    - **Include:** selector **Emails**, then type each administrator's email address, pressing Enter after each. Include your own.
+    - Remove any other "Include" rule, then **Save**.
+    - Under the application's **Login methods**, make sure **One-time PIN** is ticked. **Session duration** can stay at 24 hours. Longer means fewer codes; shorter is safer on shared computers.
+16. **Tell the website your team.** Go to **Workers & Pages** → `ul-si-claims` → **Settings** → **Variables and Secrets** → **Add**:
+    - **Type:** Text
+    - **Variable name:** `ACCESS_TEAM`
+    - **Value:** your team name from step 10, for example `ul-si`
+    - **Environment:** Production
+
+    Click **Save**.
+17. **Make it take effect.** Go to **Deployments**. On the newest production deployment, click **⋯** → **Retry deployment**, and wait until it says Success.
+18. **Test it:**
+    - Open `https://ul-si-claims.pages.dev`. Cloudflare asks for your email. Enter it, and type the code it emails you (check spam; a code lasts 10 minutes). The app opens.
+    - In a private window, try an email that isn't on the list. It must not get in.
+    - Install it on your phone ("How to run it", step 9). If the iPhone app keeps asking you to sign in, tell Claude.
+
+### Changing who can sign in
+
+**Zero Trust** → **Access** → **Applications** → `SI Claim Forms` →
+**Policies** → `SI administrators`. Add or remove email addresses, then
+**Save**. This applies to every new sign-in. To also sign out everyone already
+signed in (for example, after removing someone), open the application and
+click **Revoke existing tokens**. Everyone else then just signs in again.
+
+**Zero Trust** → **Logs** → **Access** shows who signed in and when.
+
+### Updating the site
+
+When Claude changes the app, it runs all the tests, then saves the change and
+uploads it to GitHub, but only when you say so. Cloudflare then builds and
+publishes the new version within a few minutes. **Workers & Pages** →
+`ul-si-claims` → **Deployments** shows its progress. An installed app picks up
+the new version the next time it's opened with internet (sometimes only on the
+second opening).
+
+If a new version is broken, go to **Deployments**, find one that worked, and
+click **⋯** → **Rollback to this deployment**.
+
+### How the online site is protected
+
+- **Two locks.** Cloudflare Access asks for the code and checks the allow-list. The website's own check (`functions/_middleware.ts`) then refuses to send anything unless Access signed the visitor in. If Access is ever switched off or set up wrongly, the site stays closed instead of opening to everyone.
+- **Browser rules** (`web/public/_headers`) stop the page connecting anywhere except its own site, so uploaded files can't leave the device. They also stop it being shown inside another website.
+- **Offline.** An installed app opens without internet, along with what that device keeps: the blank form, the SI list and the other spellings. The SI list includes student numbers, so keep a phone or computer with the app on it locked, like any device holding the list. Remove the kept files on a shared computer when you're done.
+- Nothing personal is logged by the app. Cloudflare's sign-in log keeps each sign-in's email and time.
+
+### If something goes wrong
+
+- **A deployment failed** (red under Deployments): open it, copy the last lines of the build log, and give them to Claude.
+- **"This site's sign-in isn't finished yet"**: `ACCESS_TEAM` is missing or misspelled. Redo steps 16 and 17.
+- **"This site is for SI administrators only", without being asked for an email**: Access isn't covering this address. Check steps 12 to 14.
+- **No code arrives**: check spam, and check the address is on the list exactly as typed. Each new code cancels the previous one.
 
 ## The claim rules (summary)
 

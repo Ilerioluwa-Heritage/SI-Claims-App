@@ -1,0 +1,11 @@
+# Rules Cloudflare Pages sends with every file of the website.
+# Content-Security-Policy: the page may only load its own files and may only
+# connect back to its own site, so uploaded files can't be sent anywhere else,
+# even by mistake. It also can't be shown inside another site.
+/*
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+  Cross-Origin-Opener-Policy: same-origin

@@ -28,7 +28,11 @@ describe('installing on phones', () => {
   });
 
   it('links the manifest and the iPhone icon from the page', () => {
-    for (const tag of ['rel="manifest" href="./manifest.webmanifest"', 'rel="apple-touch-icon" href="./icons/apple-touch-icon.png"', 'name="theme-color"']) {
+    for (const tag of [
+      'rel="manifest" href="./manifest.webmanifest" crossorigin="use-credentials"',
+      'rel="apple-touch-icon" href="./icons/apple-touch-icon.png"',
+      'name="theme-color"',
+    ]) {
       expect(html).toContain(tag);
     }
   });
@@ -37,5 +41,40 @@ describe('installing on phones', () => {
     const sw = readFileSync('web/public/sw.js', 'utf8');
     expect(sw).toContain("request.method !== 'GET'");
     expect(sw).toContain('origin !== self.location.origin');
+  });
+
+  it("never keeps Cloudflare's sign-in pages, or anything but the app's own page, as the page", () => {
+    const sw = readFileSync('web/public/sw.js', 'utf8');
+    expect(sw).toContain("url.pathname.startsWith('/cdn-cgi/')) return;");
+    expect(sw).toContain("if (response.ok && response.type === 'basic')");
+  });
+
+  it("keeps only the app's own files (its code, styles, icons and manifest)", () => {
+    const sw = readFileSync('web/public/sw.js', 'utf8');
+    // The pattern sw.js checks each address against.
+    const appFile = new RegExp(/if \(!\/(.*)\/\.test\(path\)\)/.exec(sw)?.[1] ?? '$^');
+    for (const path of ['assets/index-CqW-Vvpn.js', 'assets/index-CqW-Vvpn.css', 'icons/icon-192.png', 'manifest.webmanifest']) {
+      expect(appFile.test(path)).toBe(true);
+    }
+    for (const path of ['__fixture.pdf', 'register.docx', 'assets/../secret', 'other/assets/x.js', 'index.html?x']) {
+      expect(appFile.test(path)).toBe(false);
+    }
+  });
+});
+
+describe('online', () => {
+  const headers = readFileSync('web/public/_headers', 'utf8');
+  const policy = /^\s+Content-Security-Policy: (.*)$/m.exec(headers)?.[1] ?? '';
+
+  it('lets the page connect only to its own site, so uploads can never be sent elsewhere', () => {
+    expect(headers).toMatch(/^\/\*$/m);
+    for (const rule of ["default-src 'self'", "connect-src 'self'", "script-src 'self'", "form-action 'self'", "frame-ancestors 'none'", "object-src 'none'"]) {
+      expect(policy).toContain(rule);
+    }
+    expect(policy).not.toMatch(/unsafe|\*|https?:/);
+  });
+
+  it('runs the sign-in check before every page and file', () => {
+    expect(readFileSync('functions/_middleware.ts', 'utf8')).toContain("export { onRequest } from '../src/gate/access.ts'");
   });
 });

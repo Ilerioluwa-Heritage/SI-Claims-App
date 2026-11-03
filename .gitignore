@@ -4,6 +4,10 @@ node_modules/
 # Build output
 dist/
 
+# Cloudflare's local test files
+.wrangler/
+.dev.vars
+
 # This computer's preview settings for the Claude desktop app
 .claude/launch.json
 

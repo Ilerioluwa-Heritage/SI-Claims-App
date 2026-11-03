@@ -14,6 +14,9 @@ import { readRegister, type RegisterRow } from '../../src/read/register.ts';
 import { levelFromList, rosterWithAdmins, runMonth, type Check } from '../../src/run/month.ts';
 import { Editor, type FormFile } from './Editor.tsx';
 import { Install } from './Install.tsx';
+
+/** On the online site, behind Cloudflare's sign-in (not when trying it on this computer). */
+const ONLINE = import.meta.env.PROD && !['localhost', '127.0.0.1'].includes(location.hostname);
 import { Results, type Run } from './Results.tsx';
 import { bytesOf } from './save.ts';
 import { getKept, removeKept, setKept, type KeptFile, type KeptList } from './storage.ts';
@@ -227,6 +230,11 @@ export function App() {
         <h1>SI Claim Forms</h1>
         <p>Centre for Academic Excellence: Supplemental Instruction</p>
         <Install />
+        {ONLINE && (
+          <a className="hint" href="/cdn-cgi/access/logout">
+            Sign out
+          </a>
+        )}
       </header>
       <nav className="tabs">
         <button className={tab === 'monthly' ? 'on' : ''} onClick={() => setTab('monthly')}>

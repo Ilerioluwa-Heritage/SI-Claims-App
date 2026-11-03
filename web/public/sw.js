@@ -26,15 +26,21 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const request = event.request;
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
+  const url = new URL(request.url);
+  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  // Cloudflare's sign-in and sign-out pages: always straight from the internet, never kept.
+  if (url.pathname.startsWith('/cdn-cgi/')) return;
 
   if (request.mode === 'navigate') {
     // The page itself: the newest from the internet, the kept copy when offline.
+    // Only the app's own page is kept, never a sign-in redirect or a closed page.
     event.respondWith(
       fetch(request)
         .then((response) => {
-          const copy = response.clone();
-          void caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          if (response.ok && response.type === 'basic') {
+            const copy = response.clone();
+            void caches.open(CACHE).then((cache) => cache.put('./index.html', copy));
+          }
           return response;
         })
         .catch(() => caches.match('./index.html')),
@@ -43,6 +49,9 @@ self.addEventListener('fetch', (event) => {
   }
 
   // The app's own files (a new version has new file names): the kept copy first.
+  // Anything else is fetched as usual and not kept.
+  const path = url.href.slice(self.registration.scope.length);
+  if (!/^(assets|icons)\/[^/]+$|^manifest\.webmanifest$/.test(path)) return;
   event.respondWith(
     caches.match(request).then(
       (kept) =>
