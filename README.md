@@ -40,7 +40,7 @@ identical results.
 | 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. A second form is used only when combining lines isn't enough. |
 | 3 | Website: upload, checks, downloads, control list | **Done (3 Nov 2026).** The website reads every source and checks a real month. October 2026 has been run and compared with the submitted forms. The administrators' sign-in list comes when the site goes online (stage 7). |
 | 4 | Claim form editor (see below) | **Done (3 Nov 2026).** It's the "Claim form editor" tab on the website. |
-| 5 | Installing on phones | Not started |
+| 5 | Installing on phones | **Done (3 Nov 2026), ready to install once online.** The app has its icons, a manifest and an offline helper, and works without a connection once opened. Phones only install apps from sites online over HTTPS, so installing on a phone is tried in stage 7. |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
 | 7 | Putting it online | Not started |
 
@@ -105,6 +105,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
 | `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
 | `web/` | The website's screens, on one page that also works on a phone: month, kept files, this month's files, check, summary, checks, claim forms and downloads. Everything runs in your browser. Monthly files aren't kept; the blank form is kept on this device until you remove it. |
+| `web/public/` | What makes it installable: `manifest.webmanifest` (name, icons, opens full screen), `sw.js` (keeps the app's own files on the device so it works offline; never your uploads), and `icons/`. |
 | `src/app/` | What the website does behind the screens: make the downloads (forms, control list, checks report, and a zip of all of them), and save the editor's changed form. It also holds a made-up month for trying the website. |
 | `web/src/Editor.tsx` | The claim form editor's screen. |
 | `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
@@ -167,10 +168,22 @@ You need Node.js and Git. They were installed on 2 November 2026.
    npm run dev
    ```
 
-   Until the class attendance and levels list can be read:
+   To try it without real files:
    - Under "Blank HRM-05 claim form", click **Use the test copy** (or upload your blank form).
    - Click **Try it with made-up data**, then **Make the claim forms**.
    - The summary, the checks and all the downloads work as they will with real files.
+
+8. **Try the installable version.** This builds the app as it will be put online, then opens it at <http://localhost:4173>. In Chrome or Edge on this computer, an **Install this app** button appears at the top (or an install icon at the right of the address bar). Once it has opened once, it keeps working with PowerShell closed and no internet.
+
+   ```
+   npm run build
+   ```
+
+   ```
+   npm run preview
+   ```
+
+9. **Install it on a phone (once it's online, stage 7).** Phones only install apps from a site that is online over HTTPS. Open the site's address on the phone. On Android, tap **Install this app** at the top of the page, or Chrome's menu → **Install app**. On iPhone, open it in Safari, tap **Share**, then **Add to Home Screen**. It then opens from its icon, full screen, even without signal.
 
 If a test fails, don't hand anything over. A failing test means a rule
 gives a different answer from what it should.

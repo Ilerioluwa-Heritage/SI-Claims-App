@@ -5,6 +5,8 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   root: 'web',
+  // Relative links, so the site works wherever it's put online (e.g. in a sub-folder).
+  base: './',
   plugins: [react()],
   server: { port: 5173, strictPort: true, fs: { allow: ['..'] } },
   // The PDF library alone is about 500 kB, so the page is bigger than Vite's usual warning size.

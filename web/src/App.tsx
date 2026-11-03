@@ -13,6 +13,7 @@ import { readLevelsList } from '../../src/read/levels-list.ts';
 import { readRegister, type RegisterRow } from '../../src/read/register.ts';
 import { levelFromList, rosterWithAdmins, runMonth, type Check } from '../../src/run/month.ts';
 import { Editor, type FormFile } from './Editor.tsx';
+import { Install } from './Install.tsx';
 import { Results, type Run } from './Results.tsx';
 import { bytesOf } from './save.ts';
 import { getKept, removeKept, setKept, type KeptFile, type KeptList } from './storage.ts';
@@ -225,6 +226,7 @@ export function App() {
       <header>
         <h1>SI Claim Forms</h1>
         <p>Centre for Academic Excellence: Supplemental Instruction</p>
+        <Install />
       </header>
       <nav className="tabs">
         <button className={tab === 'monthly' ? 'on' : ''} onClick={() => setTab('monthly')}>
