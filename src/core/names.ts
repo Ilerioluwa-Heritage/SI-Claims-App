@@ -11,6 +11,11 @@ export interface RosterPerson {
   active: boolean;
   role: 'SIL' | 'Admin';
   aliases: string[];
+  /**
+   * From the levels list, for the control list's STUDENT NO: column only
+   * (SI Administrator, 3 Nov 2026). Never put on a claim form or in the checks report.
+   */
+  studentNumber?: string;
 }
 
 /** 'spelling' means the surname was one letter off; the checks report lists these. */

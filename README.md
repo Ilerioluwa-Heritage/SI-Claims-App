@@ -21,7 +21,7 @@ Every run needs all three files, uploaded fresh each month. It won't start if an
 
 The app keeps these two until you remove them and upload a newer version, for example once a year.
 
-1. **The list of SI Leaders and their levels.** It sets each person's rate, and it's the list names are matched against. The debrief's "Level:" answers are only checked against it.
+1. **The list of SI Leaders and their levels.** It sets each person's rate, and it's the list names are matched against. The debrief's "Level:" answers are only checked against it. It also holds each person's **student number**. Student numbers go only into the control list's `STUDENT NO:` column (your decision, 3 Nov 2026), never onto a claim form or into the checks report.
 2. **The blank HRM-05 claim form.** The app fills this form exactly as you uploaded it. Its fonts, character sizes, colours, field names and settings are never changed:
    - Each value goes into its box and is drawn in the form's own font and size.
    - Nothing is made smaller to fit. If a value is too wide for its box, the checks report says so.
@@ -38,7 +38,7 @@ identical results.
 |---|---|---|
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
 | 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. A second form is used only when combining lines isn't enough. |
-| 3 | Website: upload, checks, downloads, control list | **In progress.** Part 1 is done: the month run (who claims what, and the checks report) and the Excel control list. Part 2 is the screens. Part 3, reading the class attendance and the levels list, waits for your sample files. |
+| 3 | Website: upload, checks, downloads, control list | **In progress.** Parts 1 and 2 are done: the month run, the control list, and the website's screens. Part 3, reading the class attendance and the levels list, waits for your sample files. Until then, try the website with made-up data. The administrators' sign-in list comes when the site goes online (stage 7). |
 | 4 | Claim form editor (see below) | Not started |
 | 5 | Installing on phones | Not started |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
@@ -92,7 +92,10 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. It fills one form per person, or two when the rules call for a second; each is an untouched copy of the form. It also checks a newly uploaded form. |
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
 | `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
-| `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. The student number and bank columns are left empty. |
+| `web/` | The website's screens, on one page that also works on a phone: month, kept files, this month's files, check, summary, checks, claim forms and downloads. Everything runs in your browser. Monthly files aren't kept; the blank form is kept on this device until you remove it. |
+| `src/app/` | What the website does behind the screens: make the downloads (forms, control list, checks report, and a zip of all of them). It also holds a made-up month for trying the website. |
+| `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
+| `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. `STUDENT NO:` comes from the levels list, and the bank columns are left empty. |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
@@ -144,6 +147,17 @@ You need Node.js and Git. They were installed on 2 November 2026.
    ```
    npm run demo:pdf
    ```
+
+7. **Try the website.** Start it, then open <http://localhost:5173> in your browser. Leave PowerShell open while you use it, and press Ctrl+C there to stop it.
+
+   ```
+   npm run dev
+   ```
+
+   Until the class attendance and levels list can be read:
+   - Under "Blank HRM-05 claim form", click **Use the test copy** (or upload your blank form).
+   - Click **Try it with made-up data**, then **Make the claim forms**.
+   - The summary, the checks and all the downloads work as they will with real files.
 
 If a test fails, don't hand anything over. A failing test means a rule
 gives a different answer from what it should.

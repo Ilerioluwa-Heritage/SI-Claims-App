@@ -1,7 +1,8 @@
 // The month's control list (Excel), as the brief sets out: alphabetical by
 // surname, with TOTAL AMOUNT as a live formula (=F2*G2), not a typed number.
-// The student number and bank columns are left empty for the administrators
-// to fill in from the submitted packs; this program never handles them.
+// STUDENT NO: comes from the levels list (SI Administrator, 3 Nov 2026). The
+// bank columns are left empty for the administrators to fill in from the
+// submitted packs; this program never handles bank details.
 
 import { strToU8, zipSync } from 'fflate';
 
@@ -13,6 +14,8 @@ export const CONTROL_LIST_HEADINGS = [
 export interface ControlListRow {
   surname: string;
   initials: string;
+  /** From the levels list; empty if it isn't there. */
+  studentNumber: string;
   level: string;
   minutes: number;
   /** Null leaves the rate empty (the checks report says why). */
@@ -62,6 +65,7 @@ export function controlList(rows: ControlListRow[]): Uint8Array {
       number(`A${r}`, i + 1) +
       text(`B${r}`, p.surname) +
       text(`C${r}`, p.initials) +
+      (p.studentNumber ? text(`D${r}`, p.studentNumber) : '') +
       text(`E${r}`, p.level) +
       number(`F${r}`, hours) +
       (rate === null ? '' : number(`G${r}`, rate, STYLE.money)) +

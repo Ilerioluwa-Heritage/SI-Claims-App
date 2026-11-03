@@ -7,18 +7,26 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.web.json",
+    "dev": "vite",
+    "build": "vite build",
     "demo": "node scripts/demo.ts",
     "demo:pdf": "node scripts/demo-pdf.ts"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "5.2.0",
     "typescript": "^5.9.3",
+    "vite": "7.3.7",
     "vitest": "^3.2.4"
   },
   "dependencies": {
     "@xmldom/xmldom": "0.9.12",
     "fflate": "0.8.3",
-    "pdf-lib": "1.17.1"
+    "pdf-lib": "1.17.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   }
 }

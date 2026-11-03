@@ -4,9 +4,9 @@ import { CONTROL_LIST_HEADINGS, controlList } from '../src/out/control-list.ts';
 import { readSheet } from '../src/read/office.ts';
 
 const ROWS = [
-  { surname: 'SAMPLE', initials: 'CD', level: 'Honours', minutes: 8.5 * 60, rateCents: 4700 },
-  { surname: "O'NEIL & SON", initials: 'AB', level: '3rd year', minutes: 36.25 * 60, rateCents: 3650 },
-  { surname: 'EXAMPLE', initials: 'AB', level: '', minutes: 120, rateCents: null },
+  { surname: 'SAMPLE', initials: 'CD', studentNumber: '200000002', level: 'Honours', minutes: 8.5 * 60, rateCents: 4700 },
+  { surname: "O'NEIL & SON", initials: 'AB', studentNumber: '200000001', level: '3rd year', minutes: 36.25 * 60, rateCents: 3650 },
+  { surname: 'EXAMPLE', initials: 'AB', studentNumber: '', level: '', minutes: 120, rateCents: null },
 ];
 
 describe('the control list (Excel)', () => {
@@ -33,9 +33,13 @@ describe('the control list (Excel)', () => {
     expect(cell(1, 'TOTAL AMOUNT')).toBe('1323.125');
   });
 
-  it('leaves the student number and bank columns empty, for the administrators to fill in', () => {
+  it('takes STUDENT NO: from the levels list, blank where the list has none', () => {
+    expect(sheet.rows.map((_, i) => cell(i, 'STUDENT NO:'))).toEqual(['', '200000001', '200000002']);
+  });
+
+  it('leaves the bank columns empty, for the administrators to fill in', () => {
     for (let i = 0; i < ROWS.length; i++) {
-      expect(['STUDENT NO:', 'BANK NAME', 'BRANCH CODE', 'ACCOUNT NUMBER'].map((h) => cell(i, h))).toEqual(['', '', '', '']);
+      expect(['BANK NAME', 'BRANCH CODE', 'ACCOUNT NUMBER'].map((h) => cell(i, h))).toEqual(['', '', '']);
     }
   });
 });

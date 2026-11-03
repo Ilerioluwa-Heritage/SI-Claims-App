@@ -53,7 +53,7 @@ const listRows: ControlListRow[] = [];
 for (const e of examples) {
   const claim = buildSilClaim({ sessions: e.sessions, classes: e.classes, rateCents: parseRand('36.50') }, S);
   const [surname = '', initials = ''] = e.formName.split(' ');
-  listRows.push({ surname, initials, level: '3rd year', minutes: claim.totalMinutes, rateCents: claim.rateCents });
+  listRows.push({ surname, initials, studentNumber: '', level: '3rd year', minutes: claim.totalMinutes, rateCents: claim.rateCents });
   console.log(`${e.formName}: ${claim.rows.length} lines, ${claim.totalMinutes / 60}h, ${formatRand(claim.amountCents)}`);
   for (const n of claim.notes.filter((n) => n.kind === 'combined' || n.kind === 'too-many-lines')) console.log(`  - ${n.message}`);
   try {

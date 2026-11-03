@@ -50,6 +50,7 @@ export const CHECK_SECTIONS = {
   midnight: 'Time moved onto the start to finish by 23H30',
   'data-allowance': 'How the data allowance was spread',
   forms: 'Lines combined to fit the form, and second forms',
+  'form-text': 'Text wider than its box on the form (cut off on screen and paper; the full text is in the box)',
   classes: 'Class records counted once',
   admins: 'Administrators',
 } as const;
@@ -106,6 +107,7 @@ export function controlListRows(result: MonthResult): ControlListRow[] {
   return result.people.map((p) => ({
     surname: p.person.surname,
     initials: p.person.initials,
+    studentNumber: p.person.studentNumber ?? '',
     level: p.level ?? p.person.level,
     minutes: p.totalMinutes,
     rateCents: p.rateCents,

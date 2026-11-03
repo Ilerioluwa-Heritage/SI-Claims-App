@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 
+# This computer's preview settings for the Claude desktop app
+.claude/launch.json
+
 # Real monthly data must never go into the repository (POPIA).
 # Keep exports, submitted forms and generated PDFs in OneDrive instead.
 local-data/

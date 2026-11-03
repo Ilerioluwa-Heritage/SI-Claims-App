@@ -20,7 +20,7 @@ const deb = (date: string, name: string, start: string, end: string, levelText: 
 });
 
 const ROSTER = [
-  person('EXAMPLE', 'AB', '3rd year'),
+  { ...person('EXAMPLE', 'AB', '3rd year'), studentNumber: '200000001' },
   person('SAMPLE', 'CD', 'Honours'),
   person('OTHER', 'EF', ''),
   person('ADMIN', 'GH', 'Masters', 'Admin'),
@@ -112,12 +112,16 @@ describe('one month, start to finish (made-up data)', () => {
     expect(sections).toEqual([...sections].sort((a, b) => a - b));
   });
 
-  it('gives the control list its rows', () => {
-    expect(controlListRows(m).map((r) => `${r.surname} ${r.initials} ${r.level} ${r.minutes / 60} ${r.rateCents}`)).toEqual([
-      'ADMIN GH Masters 80 6200',
-      'EXAMPLE AB 3rd year 8 3650',
-      'OTHER EF  2 null',
-      'SAMPLE CD Honours 8.5 4700',
+  it('gives the control list its rows, with student numbers from the levels list', () => {
+    expect(controlListRows(m).map((r) => `${r.surname} ${r.initials} [${r.studentNumber}] ${r.level} ${r.minutes / 60} ${r.rateCents}`)).toEqual([
+      'ADMIN GH [] Masters 80 6200',
+      'EXAMPLE AB [200000001] 3rd year 8 3650',
+      'OTHER EF []  2 null',
+      'SAMPLE CD [] Honours 8.5 4700',
     ]);
+  });
+
+  it('never puts a student number in the checks report', () => {
+    expect(JSON.stringify(m.checks)).not.toContain('200000001');
   });
 });
