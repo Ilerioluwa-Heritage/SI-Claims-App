@@ -4,11 +4,13 @@
 //                classes are combined (at most 3 to a line) and it fits on one form
 //   EXAMPLE EF - 15 sessions at different times: nothing can be combined, so
 //                the claim continues on a second form (its own file)
+// It also writes their control list (Excel).
 // Run it with:  npm run demo:pdf  [-- "<blank form.pdf>"]
 // The blank form defaults to the test copy. The files go to local-data/ (never uploaded).
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { DEFAULT_SETTINGS as S, buildSilClaim, formatRand, parseRand, parseTime, type ClassRecord, type SiSession } from '../src/core/index.ts';
+import { controlList, type ControlListRow } from '../src/out/control-list.ts';
 import { checkClaimForm, fillClaimForm, firstOfNextMonth } from '../src/pdf/fill.ts';
 
 const t = (s: string) => parseTime(s) ?? 0;
@@ -47,8 +49,11 @@ if (problems.length) {
   process.exit(1);
 }
 mkdirSync('local-data', { recursive: true });
+const listRows: ControlListRow[] = [];
 for (const e of examples) {
   const claim = buildSilClaim({ sessions: e.sessions, classes: e.classes, rateCents: parseRand('36.50') }, S);
+  const [surname = '', initials = ''] = e.formName.split(' ');
+  listRows.push({ surname, initials, level: '3rd year', minutes: claim.totalMinutes, rateCents: claim.rateCents });
   console.log(`${e.formName}: ${claim.rows.length} lines, ${claim.totalMinutes / 60}h, ${formatRand(claim.amountCents)}`);
   for (const n of claim.notes.filter((n) => n.kind === 'combined' || n.kind === 'too-many-lines')) console.log(`  - ${n.message}`);
   try {
@@ -75,3 +80,5 @@ for (const e of examples) {
     console.log(`  ! No form filled: ${(err as Error).message}`);
   }
 }
+writeFileSync('local-data/EXAMPLE control list.xlsx', controlList(listRows));
+console.log('Control list -> local-data/EXAMPLE control list.xlsx');

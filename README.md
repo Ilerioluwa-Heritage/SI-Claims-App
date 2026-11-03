@@ -38,7 +38,7 @@ identical results.
 |---|---|---|
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
 | 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. A second form is used only when combining lines isn't enough. |
-| 3 | Website: upload, checks, downloads, control list | Not started |
+| 3 | Website: upload, checks, downloads, control list | **In progress.** Part 1 is done: the month run (who claims what, and the checks report) and the Excel control list. Part 2 is the screens. Part 3, reading the class attendance and the levels list, waits for your sample files. |
 | 4 | Claim form editor (see below) | Not started |
 | 5 | Installing on phones | Not started |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
@@ -91,6 +91,8 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
 | `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. It fills one form per person, or two when the rules call for a second; each is an untouched copy of the form. It also checks a newly uploaded form. |
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
+| `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
+| `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. The student number and bank columns are left empty. |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
@@ -135,6 +137,7 @@ You need Node.js and Git. They were installed on 2 November 2026.
    - `EXAMPLE AB.pdf` is the demo month.
    - `EXAMPLE CD.pdf` has 15 lines, so its four classes at the same time are combined into 2 lines (3 classes, then 1), and it fits on one form.
    - `EXAMPLE EF.pdf` and `EXAMPLE EF (form 2).pdf` have 15 sessions at different times. Nothing can be combined, so the claim continues on a second form.
+   - `EXAMPLE control list.xlsx` is the control list for these three. Click a TOTAL AMOUNT cell to see its formula.
 
     To try a different blank form, put its path after `--`, e.g. `npm run demo:pdf -- "C:\path\to\form.pdf"`:
 
