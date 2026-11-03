@@ -32,7 +32,7 @@ import {
   type PDFObject,
 } from 'pdf-lib';
 import { MONTH_NAMES } from '../core/dates.ts';
-import { showHours } from '../core/editor.ts';
+import { showHours, type FormText } from '../core/editor.ts';
 import { formatRand } from '../core/money.ts';
 import { formatDates, type ClaimRow } from '../core/rules.ts';
 import type { Settings } from '../core/settings.ts';
@@ -143,7 +143,9 @@ function defaultAppearance(dict: PDFDict): string | undefined {
   return da instanceof PDFString || da instanceof PDFHexString ? da.decodeText() : undefined;
 }
 
-const TEXT_SLOT =/\((?:\\[\s\S]|[^\\)])*\)\s*Tj|<[0-9A-Fa-f\s]*>\s*Tj/;
+/** Where an appearance draws its text: "(...) Tj", "<...> Tj", or "[(...) -20 (...)] TJ". */
+const TEXT_SLOT = /\((?:\\[\s\S]|[^\\)])*\)\s*Tj|<[0-9A-Fa-f\s]*>\s*Tj|\[(?:\((?:\\[\s\S]|[^\\)])*\)|<[0-9A-Fa-f\s]*>|[-\d.\s])*\]\s*TJ/;
+const TEXT_SLOTS = new RegExp(TEXT_SLOT.source, 'g');
 
 /** The text an appearance stream shows (its "(...) Tj" parts), e.g. a leftover "AUGUST". */
 export function shownText(content: string): string {
@@ -176,7 +178,15 @@ function appearanceUses(form: PDFForm): Map<PDFRef, number> {
  * drawn with the field's own default appearance (DA).
  */
 function drawInto(content: string, text: string, da: string, height: number): string {
-  if (TEXT_SLOT.test(content)) return content.replace(TEXT_SLOT, `(${literal(text)}) Tj`);
+  if (TEXT_SLOT.test(content)) {
+    // The new text goes in the first slot; any further text an earlier filling left is cleared.
+    let first = true;
+    return content.replace(TEXT_SLOTS, () => {
+      const out = first ? `(${literal(text)}) Tj` : '';
+      first = false;
+      return out;
+    });
+  }
   const size = Number(/([\d.]+)\s+Tf/.exec(da)?.[1]) || 10;
   const draw = `BT\n${da}\n2 ${((height - size) / 2 + size * 0.22).toFixed(3)} Td\n(${literal(text)}) Tj\nET\n`;
   const lastEMC = content.lastIndexOf('EMC');
@@ -255,8 +265,16 @@ function appendUpdate(original: Uint8Array, context: PDFContext, changed: Map<PD
   return out;
 }
 
-/** One copy of the form with `values` filled in. Returns its bytes and the fields whose text is too wide for the box. */
-async function fillOne(template: Uint8Array, values: Map<string, string>): Promise<{ bytes: Uint8Array; tooWide: string[] }> {
+/**
+ * One copy of the form with `values` filled in. Fields in `keepIfFilled` are
+ * only filled where the form has them blank. Returns the bytes and the fields
+ * whose text is too wide for the box.
+ */
+async function fillOne(
+  template: Uint8Array,
+  values: Map<string, string>,
+  keepIfFilled: ReadonlySet<string> = new Set(),
+): Promise<{ bytes: Uint8Array; tooWide: string[] }> {
   const doc = await PDFDocument.load(template, { updateMetadata: false });
   const { context } = doc;
   const form = doc.getForm();
@@ -269,6 +287,7 @@ async function fillOne(template: Uint8Array, values: Map<string, string>): Promi
   for (const [name, text] of values) {
     if (!WRITTEN.has(name)) throw new Error(`Refusing to fill ${name}: it isn't on the list of fields this program fills.`);
     const field = form.getTextField(name);
+    if (keepIfFilled.has(name) && (field.getText() ?? '').trim()) continue;
     const fieldRef = context.getObjectRef(field.acroField.dict);
     if (!fieldRef) throw new Error(`The form's ${label(name)} field can't be updated.`);
     field.acroField.dict.set(V, PDFString.of(literal(text)));
@@ -276,8 +295,33 @@ async function fillOne(template: Uint8Array, values: Map<string, string>): Promi
 
     for (const widget of field.acroField.getWidgets()) {
       const { ref, stream } = normalAppearance(form, widget);
-      if (!stream) throw new Error(`The form's ${label(name)} box has no appearance to draw its text in.`);
       const da = defaultAppearance(widget.dict) ?? defaultAppearance(field.acroField.dict) ?? formDA ?? '';
+      if (!stream) {
+        // PDF programs often leave an empty box without a drawing of its own. Empty
+        // stays empty; text is drawn the way the box's own font setting (DA) says.
+        if (!text) continue;
+        const rect = widget.getRectangle();
+        const fontName = /\/([^\s/]+)\s+[\d.]+\s+Tf/.exec(da)?.[1];
+        const fontRef = fontName ? fonts?.get(PDFName.of(fontName)) : undefined;
+        if (!fontRef) throw new Error(`The form's ${label(name)} box has no font setting to draw its text with.`);
+        const width = textWidth(text, da, fonts);
+        if (width !== null && width > rect.width - 4) tooWide.add(name);
+        const drawing = context.stream(bytesOf(drawInto('', text, da, rect.height)), {
+          Type: 'XObject',
+          Subtype: 'Form',
+          BBox: [0, 0, rect.width, rect.height],
+          Resources: { Font: { [fontName!]: fontRef } },
+        });
+        const drawingRef = context.register(drawing);
+        changed.set(drawingRef, drawing);
+        const ap = widget.dict.lookupMaybe(AP, PDFDict);
+        if (ap) ap.set(N, drawingRef);
+        else widget.dict.set(AP, context.obj({ N: drawingRef }));
+        const apHolder = widget.dict.get(AP);
+        if (apHolder instanceof PDFRef) changed.set(apHolder, widget.dict.lookup(AP, PDFDict));
+        else changed.set(context.getObjectRef(widget.dict) ?? fieldRef, widget.dict);
+        continue;
+      }
       const bbox = stream.dict.lookupMaybe(PDFName.of('BBox'), PDFArray)?.asArray().map((n) => (n instanceof PDFNumber ? n.asNumber() : 0)) ?? [0, 0, 0, 0];
       const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = bbox;
       const width = textWidth(text, da, fonts);
@@ -372,6 +416,93 @@ export async function fillClaimForm(template: Uint8Array, content: FormContent, 
 }
 
 // ---------------------------------------------------------------------------
+// The claim form editor: reading an uploaded form, and writing changes back
+// ---------------------------------------------------------------------------
+
+/** A form after the claim form editor has changed it. */
+export interface EditedForm {
+  /** The name to print; null keeps whatever the form's name box says. */
+  formName: string | null;
+  month: number;
+  year: number;
+  /** This form's lines, at most 13. */
+  rows: ClaimRow[];
+  totalMinutes: number;
+  rateCents: number;
+  amountCents: number;
+}
+
+async function loadForm(bytes: Uint8Array): Promise<PDFDocument | string> {
+  try {
+    return await PDFDocument.load(bytes, { updateMetadata: false });
+  } catch (e) {
+    return /encrypt/i.test(String(e)) ? 'The form is locked with a password; save an unlocked copy and upload that.' : "This file can't be read as a PDF.";
+  }
+}
+
+/**
+ * Reads an uploaded HRM-05 for the claim form editor: only the boxes this
+ * program fills (name, month, year, rate, totals and the 13 lines). The
+ * personal details on the form are never read.
+ */
+export async function readClaimForm(bytes: Uint8Array): Promise<{ text: FormText } | { problems: string[] }> {
+  const doc = await loadForm(bytes);
+  if (typeof doc === 'string') return { problems: [doc] };
+  const fields = new Map(doc.getForm().getFields().map((f) => [f.getName(), f]));
+  const missing = [...WRITTEN].filter((n) => !(fields.get(n) instanceof PDFTextField));
+  if (missing.length) {
+    return { problems: [`This doesn't look like the HRM-05 claim form: it has no box for the ${missing.slice(0, 3).map(label).join(', ')}.`] };
+  }
+  const get = (name: string) => ((fields.get(name) as PDFTextField).getText() ?? '').trim();
+  const lines = Array.from({ length: 13 }, (_, i) => lineFields(i + 1))
+    .map((f) => ({ date: get(f.date), service: get(f.service), timeIn: get(f.timeIn), timeOut: get(f.timeOut), hours: get(f.hours) }))
+    .filter((l) => l.date || l.service || l.timeIn || l.timeOut || l.hours);
+  return { text: { name: get(HEADER.name), month: get(HEADER.month), year: get(HEADER.year), rate: get(HEADER.rate), lines } };
+}
+
+/**
+ * Writes the editor's changes into an uploaded form, keeping the form exactly
+ * as it is: its fonts, sizes and field names, and everything typed in the boxes
+ * this program doesn't fill (the SI Leader's own details stay as they were,
+ * unread). All 13 lines are rewritten, so a removed line comes out blank. The
+ * boxes every claim has (school, cost centre, approver, dates) are filled only
+ * where the form has them blank.
+ */
+export async function rewriteClaimForm(form: Uint8Array, edited: EditedForm, settings: Settings): Promise<{ bytes: Uint8Array; warnings: string[] }> {
+  if (edited.rows.length > settings.rowsPerPage) throw new Error(`A form holds at most ${settings.rowsPerPage} lines.`);
+  const submitted = formatDates([firstOfNextMonth(edited.month, edited.year)]);
+  const values = new Map<string, string>([
+    [HEADER.month, MONTH_NAMES[edited.month - 1] ?? ''],
+    [HEADER.year, String(edited.year)],
+    [HEADER.hours, showHours(edited.totalMinutes)],
+    [HEADER.rate, formatRand(edited.rateCents)],
+    [HEADER.amount, formatRand(edited.amountCents)],
+    [HEADER.hoursAgain, showHours(edited.totalMinutes)],
+    [HEADER.school, settings.schoolName],
+    [HEADER.costCentreNo, settings.costCentreNo],
+    [HEADER.costCentreName, settings.costCentreName],
+    [HEADER.approverName, settings.signatoryName],
+    [HEADER.approverNumber, settings.signatoryPersonnelNo],
+    [HEADER.date, submitted],
+    [HEADER.dateSigned, submitted],
+  ]);
+  if (edited.formName) values.set(HEADER.name, edited.formName);
+  for (let n = 1; n <= settings.rowsPerPage; n++) {
+    const f = lineFields(n);
+    const row = edited.rows[n - 1];
+    values.set(f.date, row ? formatDates(row.dates) : '');
+    values.set(f.programme, row ? settings.programmeName : '');
+    values.set(f.service, row?.service ?? '');
+    values.set(f.timeIn, row?.timeIn ?? '');
+    values.set(f.timeOut, row?.timeOut ?? '');
+    values.set(f.hours, row ? showHours(row.minutes) : '');
+  }
+  const keepIfFilled = new Set<string>([HEADER.school, HEADER.costCentreNo, HEADER.costCentreName, HEADER.approverName, HEADER.approverNumber, HEADER.date, HEADER.dateSigned]);
+  const { bytes, tooWide } = await fillOne(form, values, keepIfFilled);
+  return { bytes, warnings: tooWide.map((name) => `The ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`) };
+}
+
+// ---------------------------------------------------------------------------
 // Checking an uploaded blank form
 // ---------------------------------------------------------------------------
 
@@ -394,7 +525,6 @@ export async function checkClaimForm(bytes: Uint8Array): Promise<string[]> {
     const f = fields.get(name);
     if (!f) problems.push(`It has no field called ${name} (the ${label(name)}).`);
     else if (!(f instanceof PDFTextField)) problems.push(`Its ${name} field (the ${label(name)}) isn't a text box.`);
-    else if (f.acroField.getWidgets().some((w) => !normalAppearance(form, w).stream)) problems.push(`Its ${name} field (the ${label(name)}) has no appearance to draw text in.`);
   }
   for (const [name, f] of fields) {
     if (WRITTEN.has(name) || !(f instanceof PDFTextField)) continue;

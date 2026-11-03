@@ -51,4 +51,14 @@ summary { cursor: pointer; font-weight: 600; }
 details ul { margin: 8px 0 0; padding-left: 20px; }
 details li { margin: 3px 0; }
 ul.files { list-style: none; padding: 0; margin: 0; columns: 2 220px; }
+.tabs { display: flex; gap: 4px; margin: 4px 0 0; }
+.tabs button { background: #ece7de; color: var(--ink); border-radius: 8px 8px 0 0; }
+.tabs button.on { background: var(--accent); color: var(--accent-ink); }
+[hidden] { display: none !important; }
+form.command { display: flex; gap: 8px; }
+form.command input { flex: 1; min-width: 0; font: inherit; padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; }
+pre.bad { white-space: pre-wrap; font: inherit; }
+.preview { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+.preview p { margin: 0 0 8px; }
+ul.warn-list { background: var(--warn-bg); border-radius: 8px; padding: 8px 12px 8px 28px; }
 .busy { position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 20px; }

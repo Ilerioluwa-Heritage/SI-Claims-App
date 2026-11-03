@@ -29,7 +29,8 @@ export type Command =
   | { kind: 'change-hours'; target: Target; minutes: number }
   | { kind: 'move'; target: Target; to: string }
   | { kind: 'set-rate'; rateCents: number | null; level: Level | null }
-  | { kind: 'set-month'; month: number; year: number };
+  | { kind: 'set-month'; month: number; year: number }
+  | { kind: 'set-name'; name: string };
 
 export const COMMAND_EXAMPLES = [
   "add a session for the 12th that's 2hrs long that began at 18H00",
@@ -44,6 +45,7 @@ export const COMMAND_EXAMPLES = [
   'set the rate to R47.00',
   'set the level to Honours',
   'the month is October 2026',
+  'the name is MABUNDA YP',
 ];
 
 const help = (first: string) => ({ error: `${first}\nFor example:\n${COMMAND_EXAMPLES.map((e) => `  ${e}`).join('\n')}` });
@@ -160,6 +162,12 @@ function parseMonth(text: string, year: number | null): Command | { error: strin
 export function parseCommand(input: string, form: { month: number | null; year: number | null }): Command | { error: string } {
   const text = tidy(input);
   if (!text.trim()) return help('Type what to change.');
+  // "the name is MABUNDA YP" / "set the name to Mabunda YP": the name as printed, in capitals.
+  const name = /^(?:(?:set|change)\s+)?(?:the\s+)?name\b\s*(?:is\b|to\b|:|=)?\s*(.*)$/i.exec(input.trim().replace(/\s+/g, ' '));
+  if (name) {
+    const value = name[1]!.trim().toUpperCase();
+    return value ? { kind: 'set-name', name: value } : { error: 'Which name? For example: "the name is MABUNDA YP".' };
+  }
   if (/\b(rate|level)\b/.test(text)) return parseRate(text);
   if (/\bmonth\b/.test(text) && !/\b(session|class|line)\b/.test(text)) return parseMonth(text, form.year);
 

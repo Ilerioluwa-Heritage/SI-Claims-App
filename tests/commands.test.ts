@@ -82,4 +82,11 @@ describe('editor commands: rate and month', () => {
   it('reads the month', () => {
     expect(read('the month is October 2026', { month: null, year: null })).toEqual({ kind: 'set-month', month: 10, year: 2026 });
   });
+
+  it('reads the name, in capitals as printed on the form', () => {
+    expect(read('the name is MABUNDA YP')).toEqual({ kind: 'set-name', name: 'MABUNDA YP' });
+    expect(read('set the name to Mabunda yp')).toEqual({ kind: 'set-name', name: 'MABUNDA YP' });
+    expect(read('name: Sample CD')).toEqual({ kind: 'set-name', name: 'SAMPLE CD' });
+    expect(read('the name is')).toMatchObject({ error: expect.stringContaining('Which name?') });
+  });
 });

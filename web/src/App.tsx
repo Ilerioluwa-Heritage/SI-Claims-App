@@ -10,6 +10,7 @@ import { checkClaimForm } from '../../src/pdf/fill.ts';
 import { readDebrief, type DebriefRow } from '../../src/read/debrief.ts';
 import { readRegister, type RegisterRow } from '../../src/read/register.ts';
 import { runMonth, type MonthResult } from '../../src/run/month.ts';
+import { Editor, type FormFile } from './Editor.tsx';
 import { Results, type Run } from './Results.tsx';
 import { bytesOf } from './save.ts';
 import { getKept, removeKept, setKept, type KeptFile } from './storage.ts';
@@ -44,6 +45,8 @@ export function App() {
   const [downloads, setDownloads] = useState<Downloads | null>(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [tab, setTab] = useState<'monthly' | 'editor'>('monthly');
+  const [editing, setEditing] = useState<FormFile | null>(null);
 
   useEffect(() => {
     getKept('claimForm')
@@ -139,7 +142,20 @@ export function App() {
         <h1>SI Claim Forms</h1>
         <p>Centre for Academic Excellence: Supplemental Instruction</p>
       </header>
+      <nav className="tabs">
+        <button className={tab === 'monthly' ? 'on' : ''} onClick={() => setTab('monthly')}>
+          Monthly claims
+        </button>
+        <button className={tab === 'editor' ? 'on' : ''} onClick={() => setTab('editor')}>
+          Claim form editor
+        </button>
+      </nav>
 
+      <div hidden={tab !== 'editor'}>
+        <Editor blankForm={claimForm?.bytes ?? null} incoming={editing} />
+      </div>
+
+      <div hidden={tab !== 'monthly'}>
       <section className="card">
         <h2>1. Month</h2>
         <div className="row">
@@ -254,8 +270,21 @@ export function App() {
         </div>
       </section>
 
-      {run && <Results run={run} downloads={downloads} canMakeForms={!!claimForm} busy={!!busy} onMakeForms={makeForms} />}
+      {run && (
+        <Results
+          run={run}
+          downloads={downloads}
+          canMakeForms={!!claimForm}
+          busy={!!busy}
+          onMakeForms={makeForms}
+          onEdit={(f) => {
+            setEditing({ fileName: f.fileName, bytes: f.bytes });
+            setTab('editor');
+          }}
+        />
+      )}
       {error && <p className="bad card">{error}</p>}
+      </div>
       {busy && <div className="busy">{busy}</div>}
     </main>
   );

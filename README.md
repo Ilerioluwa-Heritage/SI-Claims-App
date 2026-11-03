@@ -39,21 +39,28 @@ identical results.
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
 | 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. A second form is used only when combining lines isn't enough. |
 | 3 | Website: upload, checks, downloads, control list | **In progress.** Parts 1 and 2 are done: the month run, the control list, and the website's screens. Part 3, reading the class attendance and the levels list, waits for your sample files. Until then, try the website with made-up data. The administrators' sign-in list comes when the site goes online (stage 7). |
-| 4 | Claim form editor (see below) | Not started |
+| 4 | Claim form editor (see below) | **Done (3 Nov 2026).** It's the "Claim form editor" tab on the website. |
 | 5 | Installing on phones | Not started |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
 | 7 | Putting it online | Not started |
 
-### The claim form editor (planned, stage 4)
+### The claim form editor (stage 4)
 
-A section of the app for forms that need an administrator's judgement:
+The website's **Claim form editor** tab is for forms that need an administrator's judgement:
 
-- Upload any HRM-05, filled or blank.
-- Change it with typed commands, such as:
-  - "add a session for the 12th that's 2hrs long that began at 18H00"
-  - "remove the session of the 07th"
-- See the change before it's applied.
-- The total hours and amount are worked out again after every change, and you download the corrected form.
+1. Upload any HRM-05, filled or blank. On the Monthly claims tab, each finished form also has an **Edit** button that opens it here.
+2. Type what to change and press **Preview**, for example:
+   - "add a session for the 12th that's 2hrs long that began at 18H00"
+   - "remove the session of the 07th"
+
+   The full list is under "What you can type".
+3. Check the preview, then **Apply** (or Cancel). **Undo the last change** steps back one change at a time.
+4. The total hours and amount are worked out again after every change. **Download the changed form** to save it.
+
+The editor reads only the boxes this program fills: name, month, year, rate, totals and the 13 lines. It writes the changes into the uploaded form without changing anything else:
+- The form's fonts, sizes and settings stay the same.
+- What the SI Leader typed in their own boxes (cell, student number, address, bank, signature) stays as it was, and is never read.
+- If a change leaves more lines than one form holds, a second form is made from the kept blank HRM-05.
 
 The app understands the commands itself, so nothing is sent to an AI service and the form's personal details stay on the device.
 
@@ -64,6 +71,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
+4. **Two levels on the SI list with no rate in the brief:** "PGD(NQF8)" (1 person) and "1st ECP" (1 person). Until they're decided, these two are flagged and get no amount.
 
 ### Decided
 
@@ -93,7 +101,8 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
 | `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
 | `web/` | The website's screens, on one page that also works on a phone: month, kept files, this month's files, check, summary, checks, claim forms and downloads. Everything runs in your browser. Monthly files aren't kept; the blank form is kept on this device until you remove it. |
-| `src/app/` | What the website does behind the screens: make the downloads (forms, control list, checks report, and a zip of all of them). It also holds a made-up month for trying the website. |
+| `src/app/` | What the website does behind the screens: make the downloads (forms, control list, checks report, and a zip of all of them), and save the editor's changed form. It also holds a made-up month for trying the website. |
+| `web/src/Editor.tsx` | The claim form editor's screen. |
 | `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
 | `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. `STUDENT NO:` comes from the levels list, and the bank columns are left empty. |
 | `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |

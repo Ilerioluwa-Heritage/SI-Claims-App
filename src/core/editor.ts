@@ -12,6 +12,8 @@ import type { Settings } from './settings.ts';
 import { formatTime, parseTime } from './time.ts';
 
 export interface EditableClaim {
+  /** The name as printed on the form ("MABUNDA YP"); null if the form doesn't have one yet. */
+  name?: string | null;
   /** The claim's month (1-12) and year; null until known, e.g. on a blank form. */
   month: number | null;
   year: number | null;
@@ -342,6 +344,10 @@ export function applyCommand(claim: EditableClaim, cmd: Command, settings: Setti
     case 'set-month': {
       return done(`The form is for ${MONTH_NAMES[cmd.month - 1]} ${cmd.year}.`, { month: cmd.month, year: cmd.year });
     }
+
+    case 'set-name': {
+      return done(`Set the name to ${cmd.name}.`, { name: cmd.name });
+    }
   }
 }
 
@@ -369,6 +375,8 @@ export function parseFormDates(text: string): string[] | null {
 }
 
 export interface FormText {
+  /** The name box; empty on a blank form. */
+  name?: string;
   month: string;
   year: string;
   rate: string;
@@ -401,5 +409,5 @@ export function claimFromForm(form: FormText): { claim: EditableClaim; problems:
     if (hours === null) problems.push(`${n}: the hours "${l.hours}" can't be read.`);
     return { dates: dates ?? [], service, timeIn: l.timeIn.trim().toUpperCase(), timeOut: l.timeOut.trim().toUpperCase(), minutes: hours ?? 0 };
   });
-  return { claim: { month, year, rateCents, rows }, problems };
+  return { claim: { name: form.name?.trim() || null, month, year, rateCents, rows }, problems };
 }

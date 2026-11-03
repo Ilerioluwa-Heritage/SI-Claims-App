@@ -1,6 +1,6 @@
 // After a run: the summary, the checks report, and the claim forms to download.
 
-import type { Downloads } from '../../src/app/downloads.ts';
+import type { DownloadFile, Downloads } from '../../src/app/downloads.ts';
 import { MONTH_NAMES, formatHours, formatRand } from '../../src/core/index.ts';
 import { CHECK_SECTIONS, type CheckSection, type MonthResult } from '../../src/run/month.ts';
 import { save } from './save.ts';
@@ -16,7 +16,22 @@ export interface Run {
 /** Sections opened from the start: they need someone to act. */
 const NEEDS_ACTION = new Set<CheckSection>(['unmatched', 'register-problem', 'not-in-register', 'levels']);
 
-export function Results({ run, downloads, canMakeForms, busy, onMakeForms }: { run: Run; downloads: Downloads | null; canMakeForms: boolean; busy: boolean; onMakeForms: () => void }) {
+export function Results({
+  run,
+  downloads,
+  canMakeForms,
+  busy,
+  onMakeForms,
+  onEdit,
+}: {
+  run: Run;
+  downloads: Downloads | null;
+  canMakeForms: boolean;
+  busy: boolean;
+  onMakeForms: () => void;
+  /** Opens a made form in the claim form editor. */
+  onEdit: (form: DownloadFile) => void;
+}) {
   const { result } = run;
   const checks = downloads?.checks ?? result.checks;
   const label = `${MONTH_NAMES[run.month - 1]} ${run.year}`;
@@ -113,6 +128,9 @@ export function Results({ run, downloads, canMakeForms, busy, onMakeForms }: { r
                 <li key={f.fileName}>
                   <button className="link" onClick={() => save(f.fileName, f.bytes, f.type)}>
                     {f.fileName}
+                  </button>{' '}
+                  <button className="link" onClick={() => onEdit(f)}>
+                    Edit
                   </button>
                 </li>
               ))}
