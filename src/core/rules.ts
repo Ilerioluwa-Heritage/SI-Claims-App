@@ -65,8 +65,11 @@ export interface ClaimResult {
   sessions: SessionWorking[];
   /** Lines in form order (SI sessions, then classes), combined if they didn't fit. */
   rows: ClaimRow[];
-  /** False if even combining left more lines than the form holds: flagged, and no form is filled. */
-  fitsOnForm: boolean;
+  /**
+   * The lines for each form: one form, or two when combining wasn't enough.
+   * Empty if even that can't hold them (flagged; no form is filled).
+   */
+  forms: ClaimRow[][];
   dataAllowanceHours: number;
   /** Sum of all lines before the monthly cap. */
   uncappedMinutes: number;
@@ -200,32 +203,29 @@ export function classRows(classes: ClassRecord[], settings: Settings, notes: Not
 // ---------------------------------------------------------------------------
 
 /**
- * The form has 13 lines and there is never a second form (SI Administrator,
- * 3 Nov 2026). If there are more lines, class attendance lines with the same
- * time in and time out become one line first: dates joined with "&", hours
- * added. If that's still not enough, SI session lines with the same times are
- * combined the same way. A combined line sits where the first of its dates was.
- * If it still doesn't fit, it's flagged for the administrator to decide (for
- * example in the claim form editor); no line is ever dropped.
+ * Rule 11 (SI Administrator, 3 Nov 2026). The form has 13 lines. If there are
+ * more, class attendance lines with the same time in and time out are combined
+ * first, at most 3 to a line; if that's still too many, SI session lines with
+ * the same times are combined, at most 2 to a line. Dates are joined with "&"
+ * and hours added; a combined line sits where the first of its dates was.
  */
-export function combineRows(rows: ClaimRow[], rowsPerPage: number, notes: Note[]): ClaimRow[] {
+export function combineRows(rows: ClaimRow[], settings: Settings, notes: Note[]): ClaimRow[] {
   let result = rows;
-  for (const service of ['CLASS ATTENDANCE', 'SI SESSION'] as const) {
-    if (result.length <= rowsPerPage) break;
-    result = combineService(result, service, notes);
-  }
-  if (result.length > rowsPerPage) {
-    notes.push({
-      kind: 'too-many-lines',
-      message: `${result.length} lines even after combining lines with the same times; the form holds ${rowsPerPage}. This needs your decision before the form can be filled.`,
-    });
+  const steps = [
+    ['CLASS ATTENDANCE', settings.maxClassesPerLine],
+    ['SI SESSION', settings.maxSessionsPerLine],
+  ] as const;
+  for (const [service, most] of steps) {
+    if (result.length <= settings.rowsPerPage) break;
+    result = combineService(result, service, most, notes);
   }
   return result;
 }
 
-/** Lines of one service with the same time in and time out, as one line. */
-function combineService(rows: ClaimRow[], service: Service, notes: Note[]): ClaimRow[] {
-  const groups = new Map<string, ClaimRow>();
+/** Lines of one service with the same time in and time out, combined at most `most` to a line, in date order. */
+function combineService(rows: ClaimRow[], service: Service, most: number, notes: Note[]): ClaimRow[] {
+  const open = new Map<string, ClaimRow>(); // per time in/out, the line still taking dates
+  const combined = new Set<ClaimRow>();
   const out: ClaimRow[] = [];
   for (const r of rows) {
     if (r.service !== service) {
@@ -233,22 +233,40 @@ function combineService(rows: ClaimRow[], service: Service, notes: Note[]): Clai
       continue;
     }
     const key = `${r.timeIn}|${r.timeOut}`;
-    const g = groups.get(key);
-    if (g) {
-      g.dates = [...g.dates, ...r.dates];
-      g.minutes += r.minutes;
+    const line = open.get(key);
+    if (line && line.dates.length + r.dates.length <= most) {
+      line.dates = [...line.dates, ...r.dates];
+      line.minutes += r.minutes;
+      combined.add(line);
     } else {
       const copy = { ...r, dates: [...r.dates] };
-      groups.set(key, copy);
+      open.set(key, copy);
       out.push(copy);
     }
   }
-  for (const g of groups.values()) {
-    if (g.dates.length > 1) {
-      notes.push({ kind: 'combined', message: `${g.service} ${g.timeIn}-${g.timeOut} on ${formatDates(g.dates)} combined into one line` });
-    }
+  for (const line of combined) {
+    notes.push({ kind: 'combined', message: `${line.service} ${line.timeIn}-${line.timeOut} on ${formatDates(line.dates)} combined into one line` });
   }
   return out;
+}
+
+/**
+ * Only when combining isn't enough do the lines continue on a second form,
+ * a complete copy of it (at most settings.maxForms). If even that can't hold
+ * them, no form is filled and it's flagged for the administrator to decide
+ * (for example in the claim form editor); no line is ever dropped.
+ */
+export function splitIntoForms(rows: ClaimRow[], settings: Settings, notes: Note[]): ClaimRow[][] {
+  const forms: ClaimRow[][] = [];
+  for (let i = 0; i < rows.length; i += settings.rowsPerPage) forms.push(rows.slice(i, i + settings.rowsPerPage));
+  if (forms.length > settings.maxForms) {
+    notes.push({
+      kind: 'too-many-lines',
+      message: `${rows.length} lines even after combining; ${settings.maxForms} forms hold ${settings.maxForms * settings.rowsPerPage}. This needs your decision before the forms can be filled.`,
+    });
+    return [];
+  }
+  return forms.length ? forms : [[]];
 }
 
 /** "2026-10-10" -> "10/10/2026"; several dates in one month -> "10&14&17/10/2026". */
@@ -325,11 +343,12 @@ export function buildSilClaim(
     });
   }
 
-  const rows = combineRows(allRows, settings.rowsPerPage, notes);
+  const rows = combineRows(allRows, settings, notes);
+  const forms = splitIntoForms(rows, settings, notes);
   return {
     sessions,
     rows,
-    fitsOnForm: rows.length <= settings.rowsPerPage,
+    forms,
     dataAllowanceHours: allowance,
     uncappedMinutes,
     totalMinutes,

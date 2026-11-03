@@ -196,31 +196,36 @@ describe('rule 8: 80-hour cap', () => {
   });
 });
 
-describe('rule 11: fitting 13 lines, never a second form', () => {
+describe('rule 11: fitting 13 lines', () => {
   // Sessions that each start half an hour later, so no two lines have the same times.
-  const distinct = (n: number) => Array.from({ length: n }, (_, i) => ({ date: day(i + 1), start: 480 + 30 * i, end: 540 + 30 * i }));
+  const distinct = (n: number, from = 480) => Array.from({ length: n }, (_, i) => ({ date: day(i + 1), start: from + 30 * i, end: from + 60 + 30 * i }));
 
-  it('combines class lines with the same times first, and stops there if that fits', () => {
+  it('combines class lines with the same times first, at most 3 to a line, and stops there if that fits', () => {
     const classes = [12, 13, 14, 15].map((d) => lecture(d, 'MATH101', '11:10'));
     const r = claim(distinct(11), classes);
-    expect(r.rows).toHaveLength(12);
+    expect(r.rows).toHaveLength(13);
     expect(r.rows.filter((row) => row.service === 'SI SESSION').every((row) => row.dates.length === 1)).toBe(true);
-    expect(r.rows.at(-1)).toMatchObject({ dates: ['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'], timeIn: '11H10', timeOut: '13H10', minutes: 480 });
-    expect(line(r.rows.at(-1)!)).toBe('12&13&14&15/10/2026 CLASS ATTENDANCE 11H10-13H10 8');
-    expect(r.fitsOnForm).toBe(true);
+    expect(r.rows.slice(-2).map(line)).toEqual(['12&13&14/10/2026 CLASS ATTENDANCE 11H10-13H10 6', '15/10/2026 CLASS ATTENDANCE 11H10-13H10 2']);
+    expect(r.forms.map((f) => f.length)).toEqual([13]);
   });
 
-  it('then combines SI sessions with the same times, if combining classes was not enough', () => {
+  it('then combines SI sessions with the same times, at most 2 to a line, if combining classes was not enough', () => {
     const r = claim(
       Array.from({ length: 14 }, (_, i) => session(i + 1, '14:00', '15:00')),
       [20, 21, 22].map((d) => lecture(d, 'MATH101', '11:10')),
     );
     expect(r.rows.map(line)).toEqual([
-      '01&02&03&04/10/2026 SI SESSION 14H00-18H00 16',
-      '05&06&07&08&09&10&11&12&13&14/10/2026 SI SESSION 14H00-17H00 30',
+      '01&02/10/2026 SI SESSION 14H00-18H00 8',
+      '03&04/10/2026 SI SESSION 14H00-18H00 8',
+      '05&06/10/2026 SI SESSION 14H00-17H00 6',
+      '07&08/10/2026 SI SESSION 14H00-17H00 6',
+      '09&10/10/2026 SI SESSION 14H00-17H00 6',
+      '11&12/10/2026 SI SESSION 14H00-17H00 6',
+      '13&14/10/2026 SI SESSION 14H00-17H00 6',
       '20&21&22/10/2026 CLASS ATTENDANCE 11H10-13H10 6',
     ]);
-    expect(r.notes.filter((n) => n.kind === 'combined')).toHaveLength(3);
+    expect(r.notes.filter((n) => n.kind === 'combined')).toHaveLength(8);
+    expect(r.forms).toHaveLength(1);
   });
 
   it('does not combine anything when 13 lines or fewer', () => {
@@ -229,14 +234,20 @@ describe('rule 11: fitting 13 lines, never a second form', () => {
     expect(r.notes.filter((n) => n.kind === 'combined')).toHaveLength(0);
   });
 
-  it('flags it when even combining is not enough: no second form, and no line dropped', () => {
+  it('uses a second form only when combining is not enough', () => {
     const r = claim(distinct(15));
-    expect(r.rows).toHaveLength(15);
-    expect(r.fitsOnForm).toBe(false);
+    expect(r.forms.map((f) => f.length)).toEqual([13, 2]);
+    expect(r.notes.filter((n) => n.kind === 'too-many-lines')).toEqual([]);
+  });
+
+  it('flags it when even two forms are not enough, and drops no line', () => {
+    const r = claim(distinct(27, 360));
+    expect(r.rows).toHaveLength(27);
+    expect(r.forms).toEqual([]);
     expect(r.notes.filter((n) => n.kind === 'too-many-lines').map((n) => n.message)).toEqual([
-      '15 lines even after combining lines with the same times; the form holds 13. This needs your decision before the form can be filled.',
+      '27 lines even after combining; 2 forms hold 26. This needs your decision before the forms can be filled.',
     ]);
-    expect(formatHours(r.totalMinutes)).toBe('49'); // every session still counted
+    expect(formatHours(r.uncappedMinutes)).toBe('85'); // every session still counted (then capped at 80)
   });
 
   it('writes combined dates as 10&14&17/09/2026', () => {

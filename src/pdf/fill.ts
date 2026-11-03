@@ -100,17 +100,16 @@ export interface FormContent {
   year: number;
   /** "YYYY-MM-DD"; usually the 1st of the next month (see firstOfNextMonth). */
   submissionDate: string;
-  /** The lines, in form order: at most 13 (combine first; there is never a second form). */
-  rows: ClaimRow[];
+  /** The lines for each form, from the rules: one form, or two when combining wasn't enough. */
+  forms: ClaimRow[][];
   totalMinutes: number;
   rateCents: number;
   amountCents: number;
 }
 
 export interface FilledForm {
-  /** "MABUNDA YP.pdf" */
-  fileName: string;
-  bytes: Uint8Array;
+  /** "MABUNDA YP.pdf", and "MABUNDA YP (form 2).pdf" when the claim needs a second form. */
+  files: { fileName: string; bytes: Uint8Array }[];
   /** For the checks report, e.g. a value too wide for its box. */
   warnings: string[];
 }
@@ -339,22 +338,37 @@ function valuesFor(content: FormContent, lines: ClaimRow[], settings: Settings):
 }
 
 /**
- * The filled form for one person: one form, never a second one (SI
- * Administrator, 3 Nov 2026). A claim with more lines than the form holds,
- * even after combining, is refused; it needs the administrator's decision.
+ * The filled form for one person. Usually one form; a second, complete copy
+ * of the form (its own file) only when the rules couldn't fit the lines on one
+ * even after combining (SI Administrator, 3 Nov 2026). Each copy is the
+ * untouched form and shows the claim's totals. A claim that doesn't fit at
+ * all is refused; it needs the administrator's decision.
  */
 export async function fillClaimForm(template: Uint8Array, content: FormContent, settings: Settings): Promise<FilledForm> {
-  if (content.rows.length > settings.rowsPerPage) {
+  if (!content.forms.length) {
     throw new Error(
-      `${content.formName}'s claim has ${content.rows.length} lines, even after combining lines with the same times; the form holds ${settings.rowsPerPage}. ` +
-        'Decide which lines to change (for example in the claim form editor) before filling the form.',
+      `${content.formName}'s claim doesn't fit on ${settings.maxForms} forms even after combining lines with the same times. ` +
+        'Decide which lines to change (for example in the claim form editor) before filling it.',
     );
   }
-  const values = valuesFor(content, content.rows, settings);
-  const { bytes, tooWide } = await fillOne(template, values);
-  const fileName = formFileName(content.formName);
-  const warnings = tooWide.map((name) => `${fileName}: the ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`);
-  return { fileName, bytes, warnings };
+  if (content.forms.length > settings.maxForms || content.forms.some((f) => f.length > settings.rowsPerPage)) {
+    throw new Error(`A claim uses at most ${settings.maxForms} forms of ${settings.rowsPerPage} lines.`);
+  }
+  const files: FilledForm['files'] = [];
+  const warnings: string[] = [];
+  for (let i = 0; i < content.forms.length; i++) {
+    const values = valuesFor(content, content.forms[i]!, settings);
+    const { bytes, tooWide } = await fillOne(template, values);
+    const fileName = formFileName(i === 0 ? content.formName : `${content.formName} (form ${i + 1})`);
+    files.push({ fileName, bytes });
+    for (const name of tooWide) {
+      warnings.push(`${fileName}: the ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`);
+    }
+  }
+  if (files.length > 1) {
+    warnings.unshift(`${content.formName}'s lines don't fit on one form even after combining, so the claim continues on a second form: ${files.slice(1).map((f) => f.fileName).join(', ')}.`);
+  }
+  return { files, warnings };
 }
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,7 @@
 import { parseCommand, type Command, type Target } from './commands.ts';
 import { MONTH_NAMES, isoDate, monthNumber } from './dates.ts';
 import { amountCents, formatHours, formatRand, parseRand } from './money.ts';
-import { combineRows, dataAllowanceHours, formatDates, workSession, type ClaimRow, type Note, type Service } from './rules.ts';
+import { combineRows, dataAllowanceHours, formatDates, splitIntoForms, workSession, type ClaimRow, type Note, type Service } from './rules.ts';
 import type { Settings } from './settings.ts';
 import { formatTime, parseTime } from './time.ts';
 
@@ -23,8 +23,8 @@ export interface EditableClaim {
 export interface Recalculated {
   /** Lines in form order: SI sessions then classes, by date; combined if more than fit. */
   rows: ClaimRow[];
-  /** False if there are still more lines than the form holds; the warnings say so. */
-  fitsOnForm: boolean;
+  /** The lines for each form (one, or two when combining isn't enough); empty if they don't fit, which the warnings say. */
+  forms: ClaimRow[][];
   uncappedMinutes: number;
   /** After the monthly cap. */
   totalMinutes: number;
@@ -90,7 +90,8 @@ const formOrder = (rows: ClaimRow[]) =>
 /** Puts the lines in form order and works out the totals and amount again. */
 export function recalculate(claim: EditableClaim, settings: Settings): Recalculated {
   const notes: Note[] = [];
-  const rows = combineRows(formOrder(mergeClasses(claim.rows)), settings.rowsPerPage, notes);
+  const rows = combineRows(formOrder(mergeClasses(claim.rows)), settings, notes);
+  const forms = splitIntoForms(rows, settings, notes);
   const warnings = notes.map((n) => n.message);
 
   rows.forEach((r, i) => {
@@ -117,7 +118,7 @@ export function recalculate(claim: EditableClaim, settings: Settings): Recalcula
 
   return {
     rows,
-    fitsOnForm: rows.length <= settings.rowsPerPage,
+    forms,
     uncappedMinutes,
     totalMinutes,
     capped,

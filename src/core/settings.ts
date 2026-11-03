@@ -52,6 +52,12 @@ export interface Settings {
   adminHours: number;
   /** Usable session lines on one HRM-05 page (rule 11). */
   rowsPerPage: number;
+  /** Rule 11: at most this many class attendances combined into one line. */
+  maxClassesPerLine: number;
+  /** Rule 11: at most this many SI sessions combined into one line. */
+  maxSessionsPerLine: number;
+  /** Rule 11: forms one person's claim may use when combining isn't enough. */
+  maxForms: number;
   /**
    * Colours that mark rows in the daily register, by hex code. Uncoloured rows
    * are claimed. A colour not listed here is flagged and not claimed.
@@ -92,6 +98,10 @@ export const DEFAULT_SETTINGS: Settings = {
   monthlyCapHours: 80,
   adminHours: 80,
   rowsPerPage: 13,
+  // SI Administrator, 3 Nov 2026: combine up to 3 classes or 2 sessions per line, then a 2nd form.
+  maxClassesPerLine: 3,
+  maxSessionsPerLine: 2,
+  maxForms: 2,
   // SI Administrator, 2 Nov 2026: cancelled and no-students rows are not claimed.
   registerColours: {
     FF0000: { meaning: 'Session cancelled', claimed: false },

@@ -1,9 +1,9 @@
 // Fills the HRM-05 for made-up SI Leaders, so you can open the result:
 //   EXAMPLE AB - the month from `npm run demo`
 //   EXAMPLE CD - 11 sessions and 4 classes at the same time: 15 lines, so the
-//                classes are combined into one line and it fits on the form
-//   EXAMPLE EF - 15 sessions at different times: even combining can't fit it,
-//                so no form is filled and it's reported for your decision
+//                classes are combined (at most 3 to a line) and it fits on one form
+//   EXAMPLE EF - 15 sessions at different times: nothing can be combined, so
+//                the claim continues on a second form (its own file)
 // Run it with:  npm run demo:pdf  [-- "<blank form.pdf>"]
 // The blank form defaults to the test copy. The files go to local-data/ (never uploaded).
 
@@ -59,15 +59,17 @@ for (const e of examples) {
         month: 10,
         year: 2026,
         submissionDate: firstOfNextMonth(10, 2026),
-        rows: claim.rows,
+        forms: claim.forms,
         totalMinutes: claim.totalMinutes,
         rateCents: claim.rateCents,
         amountCents: claim.amountCents,
       },
       S,
     );
-    writeFileSync(`local-data/${filled.fileName}`, filled.bytes);
-    console.log(`  -> local-data/${filled.fileName}`);
+    for (const f of filled.files) {
+      writeFileSync(`local-data/${f.fileName}`, f.bytes);
+      console.log(`  -> local-data/${f.fileName}`);
+    }
     for (const w of filled.warnings) console.log(`  ! ${w}`);
   } catch (err) {
     console.log(`  ! No form filled: ${(err as Error).message}`);
