@@ -8,12 +8,13 @@ import { makeDownloads, type Downloads } from '../../src/app/downloads.ts';
 import { DEFAULT_SETTINGS as S, MONTH_NAMES, SOURCE_NAMES, missingSources } from '../../src/core/index.ts';
 import { checkClaimForm } from '../../src/pdf/fill.ts';
 import { readDebrief, type DebriefRow } from '../../src/read/debrief.ts';
+import { readLevelsList } from '../../src/read/levels-list.ts';
 import { readRegister, type RegisterRow } from '../../src/read/register.ts';
-import { runMonth, type MonthResult } from '../../src/run/month.ts';
+import { levelFromList, runMonth, type MonthResult } from '../../src/run/month.ts';
 import { Editor, type FormFile } from './Editor.tsx';
 import { Results, type Run } from './Results.tsx';
 import { bytesOf } from './save.ts';
-import { getKept, removeKept, setKept, type KeptFile } from './storage.ts';
+import { getKept, removeKept, setKept, type KeptFile, type KeptList } from './storage.ts';
 
 type Picked = { fileName: string; bytes: Uint8Array };
 type Read<T> = { rows: T[] } | { error: string };
@@ -39,6 +40,8 @@ export function App() {
   const [period, setPeriod] = useState(lastMonth);
   const [claimForm, setClaimForm] = useState<KeptFile | null>(null);
   const [claimFormProblems, setClaimFormProblems] = useState<string[]>([]);
+  const [levels, setLevels] = useState<KeptList | null>(null);
+  const [levelsError, setLevelsError] = useState('');
   const [register, setRegister] = useState<Picked | null>(null);
   const [debrief, setDebrief] = useState<Picked | null>(null);
   const [run, setRun] = useState<Run | null>(null);
@@ -49,10 +52,34 @@ export function App() {
   const [editing, setEditing] = useState<FormFile | null>(null);
 
   useEffect(() => {
-    getKept('claimForm')
-      .then((f) => setClaimForm(f ?? null))
-      .catch(() => setError("This browser won't let the app keep files, so the blank form will have to be uploaded each time."));
+    Promise.all([getKept('claimForm'), getKept('levels')])
+      .then(([form, list]) => {
+        setClaimForm(form ?? null);
+        setLevels(list ?? null);
+      })
+      .catch(() => setError("This browser won't let the app keep files, so they'll have to be uploaded each time."));
   }, []);
+
+  async function keepLevels(fileName: string, bytes: Uint8Array) {
+    setLevelsError('');
+    try {
+      // Only the name, student number and level of each person are read and kept; not the file.
+      const { people, problems } = readLevelsList(bytes, S);
+      const kept = { fileName, keptSince: today(), people, problems };
+      setLevels(kept);
+      startOver();
+      await setKept('levels', kept).catch(() => setError("The list is ready to use, but this browser wouldn't keep it for next time."));
+    } catch (e) {
+      setLevelsError((e as Error).message);
+    }
+  }
+
+  async function removeLevels() {
+    if (!window.confirm('Remove the kept list of SI Leaders? You can upload a newer version afterwards.')) return;
+    await removeKept('levels').catch(() => undefined);
+    setLevels(null);
+    startOver();
+  }
 
   const debriefRows = useMemo(() => (debrief ? attempt<DebriefRow>(() => readDebrief(debrief.bytes, S)) : null), [debrief]);
   const registerRows = useMemo(
@@ -60,7 +87,8 @@ export function App() {
     [register, debriefRows],
   );
   const readOk = (r: Read<unknown> | null) => (r && 'rows' in r ? r : undefined);
-  const missing = missingSources({ claimForm: claimForm ?? undefined, register: readOk(registerRows), debrief: readOk(debriefRows) });
+  const missing = missingSources({ claimForm: claimForm ?? undefined, levels: levels ?? undefined, register: readOk(registerRows), debrief: readOk(debriefRows) });
+  const noRate = levels ? levels.people.filter((p) => !levelFromList(p.level, S)).length : 0;
   const prefix = `${period.year}-${String(period.month).padStart(2, '0')}-`;
   const label = `${monthName(period.month)} ${period.year}`;
 
@@ -224,8 +252,32 @@ export function App() {
             </div>
           )}
         </Slot>
-        <Slot title={SOURCE_NAMES.levels}>
-          <span className="waiting">Not set up yet: send a sample of the list, so the app can learn its columns.</span>
+        <Slot title={`${SOURCE_NAMES.levels} (Word)`}>
+          {levels ? (
+            <>
+              <span className="ok">
+                {levels.fileName}: {levels.people.length} SI Leaders, kept since {levels.keptSince}
+                {noRate > 0 && <span className="bad"> ({noRate} with a level that has no rate)</span>}
+              </span>
+              <div className="buttons">
+                <Pick label="Replace" accept=".docx" onPick={async (f) => keepLevels(f.name, await bytesOf(f))} />
+                <button className="secondary" onClick={removeLevels}>
+                  Remove
+                </button>
+              </div>
+            </>
+          ) : (
+            <Pick label="Upload the list (.docx)" accept=".docx" onPick={async (f) => keepLevels(f.name, await bytesOf(f))} />
+          )}
+          <span className="hint">Only each person's name, student number and level are kept; the Contact column is never read.</span>
+          {levels && levels.problems.length > 0 && (
+            <ul className="bad">
+              {levels.problems.map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          {levelsError && <span className="bad">{levelsError}</span>}
         </Slot>
       </section>
 

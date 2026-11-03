@@ -1,7 +1,7 @@
 // Every number that decides pay lives here, so it can be changed in one place
 // (and later from the Settings screen) without touching the rules themselves.
 
-export const LEVELS = ['2nd year', '3rd year', '4th year', 'PGCE', 'Honours', 'Masters', 'PhD'] as const;
+export const LEVELS = ['1st year ECP', '2nd year', '3rd year', '4th year', 'PGCE', 'PGD (NQF 8)', 'Honours', 'Masters', 'PhD'] as const;
 export type Level = (typeof LEVELS)[number];
 
 export interface AllowanceBand {
@@ -23,6 +23,21 @@ export interface RegisterColumns {
   module: string;
   time: string;
   observer: string;
+}
+
+/** Column headings in the list of SI Leaders, by meaning. Only these columns are ever read (never "Contact"). */
+export interface LevelsListColumns {
+  name: string;
+  studentNumber: string;
+  level: string;
+}
+
+/** An administrator, claimed at a fixed number of hours (rule 9). Not on the list of SI Leaders. */
+export interface Admin {
+  /** As printed on the form, e.g. "OSOFEKUN SI". */
+  name: string;
+  /** Level of study, for the rate; blank until known. */
+  level: string;
 }
 
 /** Column headings in the debrief export, by meaning. Only these columns are ever read. */
@@ -67,6 +82,11 @@ export interface Settings {
   debriefColumns: DebriefColumns;
   /** Each answer to the debrief's level question, and the level of study (so the rate) it means. */
   debriefLevels: Record<string, Level>;
+  levelsListColumns: LevelsListColumns;
+  /** Each level as written on the list of SI Leaders, and the level of study (so the rate) it means. */
+  listLevels: Record<string, Level>;
+  /** The administrators (rule 9). Keep this list and their levels up to date here. */
+  admins: Admin[];
 
   // Fixed text on the HRM-05.
   schoolName: string;
@@ -79,10 +99,13 @@ export interface Settings {
 
 export const DEFAULT_SETTINGS: Settings = {
   rates: {
+    // SI Administrator, 3 Nov 2026: 1st year ECP as the undergraduate rate, PGD (NQF 8) as Honours.
+    '1st year ECP': '36.50',
     '2nd year': '36.50',
     '3rd year': '36.50',
     '4th year': '36.50',
     PGCE: '36.50',
+    'PGD (NQF 8)': '47.00',
     Honours: '47.00',
     Masters: '62.00',
     PhD: '83.00',
@@ -133,6 +156,32 @@ export const DEFAULT_SETTINGS: Settings = {
     Masters: 'Masters',
     PHD: 'PhD',
   },
+  levelsListColumns: {
+    name: 'Surname & Initials',
+    studentNumber: 'Student #',
+    level: 'Level of Study',
+  },
+  listLevels: {
+    '1st ECP': '1st year ECP',
+    '2nd': '2nd year',
+    '3rd': '3rd year',
+    '4th': '4th year',
+    PGCE: 'PGCE',
+    'PGD(NQF8)': 'PGD (NQF 8)',
+    Honours: 'Honours',
+    Masters: 'Masters',
+    PhD: 'PhD',
+  },
+  // From the brief. Their levels (for the rate) aren't known yet.
+  admins: [
+    { name: 'MAHLANGU N', level: '' },
+    { name: 'MALEKA R', level: '' },
+    { name: 'MASETLA MG', level: '' },
+    { name: 'MALEMA BP', level: '' },
+    { name: 'MALEMA MR', level: '' },
+    { name: 'NETHENGWE R', level: '' },
+    { name: 'OSOFEKUN SI', level: '' },
+  ],
 
   schoolName: 'CAE (SI)',
   costCentreNo: 'G082',

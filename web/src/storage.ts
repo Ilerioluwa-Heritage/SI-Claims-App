@@ -1,12 +1,27 @@
-// The files the app keeps on this device until they're removed: the blank
-// HRM-05 and the levels list. Kept in the browser's own storage (IndexedDB);
+// What the app keeps on this device until it's removed: the blank HRM-05, and
+// the people from the levels list (name, student number and level only, never
+// the uploaded file itself). Kept in the browser's own storage (IndexedDB);
 // nothing is sent anywhere. The monthly files are never kept.
+
+import type { RosterPerson } from '../../src/core/names.ts';
 
 export interface KeptFile {
   fileName: string;
   bytes: Uint8Array;
   /** "YYYY-MM-DD" */
   keptSince: string;
+}
+
+export interface KeptList {
+  fileName: string;
+  keptSince: string;
+  people: RosterPerson[];
+  problems: string[];
+}
+
+interface Kept {
+  claimForm: KeptFile;
+  levels: KeptList;
 }
 
 const DB = 'si-claims';
@@ -34,6 +49,6 @@ async function run<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) =>
   }
 }
 
-export const getKept = (key: string) => run<KeptFile | undefined>('readonly', (s) => s.get(key));
-export const setKept = (key: string, file: KeptFile) => run<void>('readwrite', (s) => s.put(file, key));
-export const removeKept = (key: string) => run<void>('readwrite', (s) => s.delete(key));
+export const getKept = <K extends keyof Kept>(key: K) => run<Kept[K] | undefined>('readonly', (s) => s.get(key));
+export const setKept = <K extends keyof Kept>(key: K, value: Kept[K]) => run<void>('readwrite', (s) => s.put(value, key));
+export const removeKept = (key: keyof Kept) => run<void>('readwrite', (s) => s.delete(key));

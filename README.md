@@ -38,7 +38,7 @@ identical results.
 |---|---|---|
 | 1 | Claim rules, reading the files, and checking against October 2026 | **In progress.** Rules, the register and debrief readers and the cross-check are done. Waiting for the lecturers' class attendance and the levels list. |
 | 2 | Filling the HRM-05 PDF | **Redone 3 Nov 2026, waiting for your look at the samples.** Fills the uploaded form for each person without changing the form itself. Personal fields are left blank. A second form is used only when combining lines isn't enough. |
-| 3 | Website: upload, checks, downloads, control list | **In progress.** Parts 1 and 2 are done: the month run, the control list, and the website's screens. Part 3, reading the class attendance and the levels list, waits for your sample files. Until then, try the website with made-up data. The administrators' sign-in list comes when the site goes online (stage 7). |
+| 3 | Website: upload, checks, downloads, control list | **In progress.** Parts 1 and 2 are done: the month run, the control list, and the website's screens. Part 3 is half done: the SI list (levels) is read and kept. The class attendance reader waits for a sample of the lecturers' file. Until then, try the website with made-up data. The administrators' sign-in list comes when the site goes online (stage 7). |
 | 4 | Claim form editor (see below) | **Done (3 Nov 2026).** It's the "Claim form editor" tab on the website. |
 | 5 | Installing on phones | Not started |
 | 6 | Reading straight from Google Sheets | Set aside: you chose to always upload the three files (2 Nov 2026) |
@@ -71,7 +71,8 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 1. **Data allowance with only one session.** Right now that session gets both hours.
 2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
 3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
-4. **Two levels on the SI list with no rate in the brief:** "PGD(NQF8)" (1 person) and "1st ECP" (1 person). Until they're decided, these two are flagged and get no amount.
+4. **The SI list doesn't cover everyone who worked in October.** 13 people with October sessions aren't on "2026 Final SI list (1).docx" (e.g. MATLOU LL, MOLOTO AM, POPELA KS, MORUDU AT, TWALA JJ). KHOROMBI and PHOSHOKO are on it with different initials (the register has NB and PM). Their sessions can't be claimed until the list includes them.
+5. **Administrators' levels.** They aren't on the SI list, so their rate is unknown until their levels are added to `admins` in `src/core/settings.ts`.
 
 ### Decided
 
@@ -86,6 +87,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
 - **Missing end times (2 Nov 2026).** If a register row has a start but no end time, the end time comes from that SI Leader's debrief for the same day and session. If the row has no time at all, both start and end come from the debrief. If there's no matching debrief, or it has no end time either, the row stays flagged and isn't claimed.
+- **Levels not in the brief (3 Nov 2026).** PGD(NQF8) is paid as Honours (R47.00), and 1st year ECP as undergraduate (R36.50).
 - **Register vs debrief (3 Nov 2026).** The register wins. A register session with no debrief is claimed and goes on the side note; a debrief with no register session isn't claimed and is flagged. A session counts as the same if it's the same SI Leader, the same day, and starts within 30 minutes.
 - **Levels (3 Nov 2026).** They come from a list of SI Leaders and levels, uploaded once.
 - **Uploads (2 Nov 2026).** All three files are uploaded for every run; nothing is read straight from Google.
@@ -105,7 +107,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `web/src/Editor.tsx` | The claim form editor's screen. |
 | `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
 | `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. `STUDENT NO:` comes from the levels list, and the bank columns are left empty. |
-| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. Rows it can't read with certainty are flagged, never guessed. |
+| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. `levels-list.ts` reads only the SI list's name, student number and level columns, never "Contact". Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |

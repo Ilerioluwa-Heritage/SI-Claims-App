@@ -3,7 +3,7 @@
 // files, so the website, the phone app and the tests all share it.
 
 import { amountCents, formatHours, formatRand, parseRand } from '../core/money.ts';
-import { matchName, type MatchResult, type RosterPerson } from '../core/names.ts';
+import { matchName, splitName, type MatchResult, type RosterPerson } from '../core/names.ts';
 import { buildSilClaim, formatDates, type ClaimResult, type NoteKind } from '../core/rules.ts';
 import { LEVELS, type Level, type Settings } from '../core/settings.ts';
 import { formatTime } from '../core/time.ts';
@@ -95,11 +95,18 @@ const SECTION_FOR_NOTE: Record<NoteKind, CheckSection> = {
   'too-many-lines': 'forms',
 };
 
-/** A level of study as written on the list ("Honours", "3rd year", "Level 3 (Third Year)"); null if unknown. */
+/** A level of study as written on the list ("3rd", "Honours", "PGD(NQF8)", "Level 3 (Third Year)"); null if unknown. */
 export function levelFromList(text: string, settings: Settings): Level | null {
   const key = plainHeading(text);
   if (!key) return null;
-  return LEVELS.find((l) => plainHeading(l) === key) ?? levelOf(text, settings);
+  const listed = Object.entries(settings.listLevels).find(([answer]) => plainHeading(answer) === key)?.[1];
+  return LEVELS.find((l) => plainHeading(l) === key) ?? listed ?? levelOf(text, settings);
+}
+
+/** The people the month is matched against: the list of SI Leaders, plus the administrators from the settings. */
+export function rosterWithAdmins(list: RosterPerson[], settings: Settings): RosterPerson[] {
+  const admins = settings.admins.map((a): RosterPerson => ({ ...splitName(a.name), formName: a.name, level: a.level, active: true, role: 'Admin', aliases: [] }));
+  return [...list, ...admins];
 }
 
 /** The control list's rows: everyone with something to claim. */

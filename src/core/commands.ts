@@ -129,6 +129,8 @@ function levelFrom(text: string): Level | null {
   if (/\bmasters?\b/.test(text)) return 'Masters';
   if (/\bhonou?rs\b/.test(text)) return 'Honours';
   if (/\bpgce\b/.test(text)) return 'PGCE';
+  if (/\bpgd\b/.test(text)) return 'PGD (NQF 8)';
+  if (/\becp\b/.test(text)) return '1st year ECP';
   if (/\b(2nd|second)\b/.test(text)) return '2nd year';
   if (/\b(3rd|third)\b/.test(text)) return '3rd year';
   if (/\b(4th|fourth)\b/.test(text)) return '4th year';

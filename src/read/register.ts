@@ -12,7 +12,7 @@ import { matchName, splitName } from '../core/names.ts';
 import type { RegisterColumns, Settings } from '../core/settings.ts';
 import { parseTime } from '../core/time.ts';
 import type { DebriefRow } from './debrief.ts';
-import { W, children, descendants, openOffice, wordText } from './office.ts';
+import { W, children, descendants, openOffice, rowCells, wordText } from './office.ts';
 import { plainHeading, readDate } from './values.ts';
 
 export interface RegisterRow {
@@ -95,16 +95,6 @@ function headingPositions(texts: string[], columns: RegisterColumns): Positions 
     pos[key] = i;
   }
   return pos as Positions;
-}
-
-/** A row's cells by column; a cell merged across columns fills each of them. */
-function rowCells(tr: Element): Element[] {
-  const cells: Element[] = [];
-  for (const tc of children(tr, 'tc')) {
-    const span = children(children(tc, 'tcPr')[0] ?? tc, 'gridSpan')[0]?.getAttributeNS(W, 'val');
-    for (let i = 0; i < Math.max(1, Number(span) || 1); i++) cells.push(tc);
-  }
-  return cells;
 }
 
 /** Shading and highlight colours used in a cell, upper case ("FF0000", "GREEN"). */

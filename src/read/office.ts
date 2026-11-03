@@ -35,6 +35,16 @@ export function children(parent: Element, localName: string): Element[] {
   return out;
 }
 
+/** A Word table row's cells by column; a cell merged across columns fills each of them. */
+export function rowCells(tr: Element): Element[] {
+  const cells: Element[] = [];
+  for (const tc of children(tr, 'tc')) {
+    const span = children(children(tc, 'tcPr')[0] ?? tc, 'gridSpan')[0]?.getAttributeNS(W, 'val');
+    for (let i = 0; i < Math.max(1, Number(span) || 1); i++) cells.push(tc);
+  }
+  return cells;
+}
+
 /** All descendant elements with this local name, in document order. */
 export function descendants(parent: Element, localName: string): Element[] {
   return Array.from(parent.getElementsByTagNameNS(W, localName));
