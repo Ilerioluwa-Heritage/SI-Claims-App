@@ -51,10 +51,11 @@ describe('claim form editor', () => {
     ]);
   });
 
-  it('rounds, and keeps to the 23H30 limit by moving the rest onto the start', () => {
+  it('rounds, and keeps to the midnight (00H00) limit by moving the rest onto the start', () => {
+    // 21:10-23:00 rounds to 21H00-23H00; + 2h prep would end at 01H00, so 1h moves onto the start.
     const r = ok(editClaim(FOUR, 'add a session on the 20th from 21H10 to 23H00', S));
-    expect(lines(r.claim)).toContain('20/10/2026 SI SESSION 19H30-23H30 4');
-    expect(r.summary).toContain('with 1.5h moved onto the start to finish by 23H30');
+    expect(lines(r.claim)).toContain('20/10/2026 SI SESSION 20H00-00H00 4');
+    expect(r.summary).toContain('with 1h moved onto the start to finish by 00H00');
   });
 
   it("removes a session (the SI Administrator's example) and works the amount out again", () => {
@@ -86,12 +87,13 @@ describe('claim form editor', () => {
     expect(editClaim(FOUR, 'remove the session of the 9th', S)).toEqual({ error: "There's no SI session on 09/10/2026." });
   });
 
-  it('adds and takes off time, keeping to 23H30', () => {
+  it('adds and takes off time, keeping to 00H00', () => {
     const late = form([['14/10/2026', 'SI SESSION', '19H00', '22H30', '3.5']]);
     expect(lines(ok(editClaim(late, 'add 1 hour to the session of the 14th', S)).claim)).toEqual(['14/10/2026 SI SESSION 19H00-23H30 4.5']);
-    const past = ok(editClaim(late, 'add 1.5 hours to the session of the 14th', S));
-    expect(lines(past.claim)).toEqual(['14/10/2026 SI SESSION 18H30-23H30 5']);
-    expect(past.summary).toContain('held at 23H30; the rest moved onto the start');
+    expect(lines(ok(editClaim(late, 'add 1.5 hours to the session of the 14th', S)).claim)).toEqual(['14/10/2026 SI SESSION 19H00-00H00 5']);
+    const past = ok(editClaim(late, 'add 2 hours to the session of the 14th', S));
+    expect(lines(past.claim)).toEqual(['14/10/2026 SI SESSION 18H30-00H00 5.5']);
+    expect(past.summary).toContain('held at 00H00; the rest moved onto the start');
     expect(lines(ok(editClaim(late, 'take 30 minutes off line 1', S)).claim)).toEqual(['14/10/2026 SI SESSION 19H00-22H00 3']);
     expect(editClaim(late, 'add 20 minutes to line 1', S)).toMatchObject({ error: expect.stringContaining('half hours') });
   });

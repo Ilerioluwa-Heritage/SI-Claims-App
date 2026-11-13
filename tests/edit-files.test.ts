@@ -54,7 +54,7 @@ describe('the claim form editor, on an uploaded form', () => {
     expect(saved.files.map((f) => f.fileName)).toEqual(['EXAMPLE AB.pdf']);
     const after = await fields(saved.files[0]!.bytes);
     const r = recalculate(edited, S);
-    expect([after('Textfield6'), after('Textfield9'), after('Textfield8')]).toEqual(['19', '19', formatRand(r.amountCents!)]);
+    expect([after('Textfield6'), after('Textfield9'), after('Textfield8')]).toEqual(['18.5', '18.5', formatRand(r.amountCents!)]);
     expect([3, 4, 5, 6].map((n) => after(lineFields(n).date))).toEqual(['14/10/2026', '21/10/2026', '05/10/2026', '']); // 07/10 gone, the class moves up, line 6 now blank
     expect(after(lineFields(6).hours)).toBe('');
   }, SLOW);
@@ -68,18 +68,33 @@ describe('the claim form editor, on an uploaded form', () => {
     expect([after('CELL_NO0'), after('UL_STUDENT_NUMBER'), after('NAME_AND_SURNAME0')]).toEqual(['0820000000', '200000001', 'EXAMPLE AB']);
   }, SLOW);
 
+  it("on an older form, clears the approver's personnel number and sets both dates to the 1st of the next month", async () => {
+    const doc = await PDFDocument.load(uploaded.bytes);
+    doc.getForm().getTextField('Textfield13').setText('9951504');
+    doc.getForm().getTextField('DATE0').setText('15/11/2026');
+    doc.getForm().getTextField('Textfield11').setText('16/11/2026');
+    const older = { fileName: uploaded.fileName, bytes: await doc.save() };
+    const saved = await saveEditedForm(older, ok(editClaim(claim, 'remove line 1', S)).claim, BLANK, S);
+    if ('error' in saved) throw new Error(saved.error);
+    const after = await fields(saved.files[0]!.bytes);
+    expect([after('Textfield13'), after('DATE0'), after('Textfield11'), after('Textfield12')]).toEqual(['', '01/11/2026', '01/11/2026', 'PROF O CHABAYA']);
+  }, SLOW);
+
   it('makes a second form from the kept blank form only when the lines no longer fit', async () => {
     let edited = claim;
     const hh = (n: number) => String(n).padStart(2, '0');
     // Nine more sessions at different times: 15 lines. Combining joins only 14/10 and 21/10 (both
-    // 14H00-17H00, already on the form), leaving 14, so the claim needs a second form.
+    // 14H00-17H00, already on the form), leaving 14, which still doesn't fit; so nothing is
+    // combined (13 Nov 2026) and the claim continues on a second form, one line each.
     for (let d = 15; d <= 23; d++) edited = ok(editClaim(edited, `add a session on ${d}/10 from ${hh(d - 10)}H00 to ${hh(d - 9)}H00`, S)).claim;
-    expect(recalculate(edited, S).forms.map((f) => f.length)).toEqual([13, 1]);
+    const fitted = recalculate(edited, S);
+    expect(fitted.forms.map((f) => f.length)).toEqual([13, 2]);
+    expect(fitted.rows.every((r) => r.dates.length === 1)).toBe(true);
     const saved = await saveEditedForm(uploaded, edited, BLANK, S);
     if ('error' in saved) throw new Error(saved.error);
     expect(saved.files.map((f) => f.fileName)).toEqual(['EXAMPLE AB.pdf', 'EXAMPLE AB (form 2).pdf']);
     const second = await fields(saved.files[1]!.bytes);
-    expect([second('NAME_AND_SURNAME0'), second(lineFields(1).date), second('CELL_NO0')]).toEqual(['EXAMPLE AB', '05/10/2026', '']);
+    expect([second('NAME_AND_SURNAME0'), second(lineFields(1).date), second(lineFields(2).date), second('CELL_NO0')]).toEqual(['EXAMPLE AB', '23/10/2026', '05/10/2026', '']);
     expect(await saveEditedForm(uploaded, edited, null, S)).toEqual({ error: 'These lines need a second form. Upload the blank HRM-05 (Monthly claims, step 2) so it can be made.' });
   }, SLOW);
 

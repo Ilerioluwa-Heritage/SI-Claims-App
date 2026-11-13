@@ -97,15 +97,17 @@ describe('filling the HRM-05 without changing the form', () => {
   it('fills the header and totals', () => {
     expect(
       ['NAME_AND_SURNAME0', 'DATE0', 'NAME_OF_SCHOOL', 'COST_CENTER_NO', 'COST_CENTER_NAME', 'Textfield4', 'Textfield5', 'Textfield6', 'Textfield7', 'Textfield8', 'Textfield9', 'Textfield11', 'Textfield12', 'Textfield13'].map(filled.value),
-    ).toEqual(['EXAMPLE AB', '01/11/2026', 'CAE (SI)', 'G082', 'UCDP STUDENT S & A', 'OCTOBER', '2026', '25.5', 'R36.50', 'R930.75', '25.5', '01/11/2026', 'PROF O CHABAYA', '9951504']);
+    ).toEqual(['EXAMPLE AB', '01/11/2026', 'CAE (SI)', 'G082', 'UCDP STUDENT S & A', 'OCTOBER', '2026', '25', 'R36.50', 'R912.50', '25', '01/11/2026', 'PROF O CHABAYA', '']);
+    // The approver's personnel number is left blank (13 Nov 2026), and stays a fillable box.
+    expect(filled.fields.get('Textfield13')!.settings).toEqual(blank.fields.get('Textfield13')!.settings);
   });
 
   it('fills the lines in order, on the right rows (DATE2 with the "0" fields)', () => {
     const row = (n: number) => Object.values(lineFields(n)).map(filled.value).join(' | ');
     expect([1, 2, 3, 4, 5, 6, 7].map(row)).toEqual([
       '02/10/2026 | SI PROGRAMME | SI SESSION | 14H00 | 19H00 | 5',
-      '07/10/2026 | SI PROGRAMME | SI SESSION | 18H00 | 23H00 | 5',
-      '09/10/2026 | SI PROGRAMME | SI SESSION | 18H00 | 23H30 | 5.5',
+      '07/10/2026 | SI PROGRAMME | SI SESSION | 18H30 | 23H00 | 4.5', // 18:15 starts at 18H30 (13 Nov 2026)
+      '09/10/2026 | SI PROGRAMME | SI SESSION | 18H30 | 00H00 | 5.5', // 20:00-22:30 + 3h would end at 01H30: held at midnight, 1.5h moved onto the start
       '14/10/2026 | SI PROGRAMME | SI SESSION | 14H00 | 17H00 | 3',
       '21/10/2026 | SI PROGRAMME | SI SESSION | 14H00 | 17H00 | 3',
       '06/10/2026 | SI PROGRAMME | CLASS ATTENDANCE | 07H40/14H00 | 09H40/16H00 | 4',
@@ -141,8 +143,41 @@ describe('filling the HRM-05 without changing the form', () => {
     const { claim, problems } = claimFromForm({ month: filled.value('Textfield4'), year: filled.value('Textfield5'), rate: filled.value('Textfield7'), lines });
     expect(problems).toEqual([]);
     const r = recalculate(claim, S);
-    expect([r.totalMinutes / 60, r.amountCents, r.warnings]).toEqual([25.5, 93075, []]);
+    expect([r.totalMinutes / 60, r.amountCents, r.warnings]).toEqual([25, 91250, []]);
   });
+});
+
+describe('the form stays a fillable form (13 Nov 2026)', () => {
+  it('after filling, every box is still an editable text box in its own font and size, and can be typed in and saved again', async () => {
+    const c = content([session(2, '14:10', '15:50')]);
+    const filled = (await fillClaimForm(TEMPLATE, c, S)).files[0]!.bytes;
+    const doc = await PDFDocument.load(filled);
+    const form = doc.getForm();
+    const blank = (await PDFDocument.load(TEMPLATE)).getForm();
+    expect(form.getFields().map((f) => f.getName())).toEqual(blank.getFields().map((f) => f.getName()));
+    for (const f of form.getFields()) {
+      expect([f.getName(), f.isReadOnly()]).toEqual([f.getName(), false]);
+      const before = blank.getField(f.getName());
+      expect([f.getName(), f.acroField.getDefaultAppearance()]).toEqual([f.getName(), before.acroField.getDefaultAppearance()]);
+    }
+    // The SI Leader can still fill in their own details, and the app's values can still be changed.
+    form.getTextField('UL_STUDENT_NUMBER').setText('200000001');
+    form.getTextField('Textfield7').setText('R47.00');
+    const again = await PDFDocument.load(await doc.save());
+    expect([again.getForm().getTextField('UL_STUDENT_NUMBER').getText(), again.getForm().getTextField('Textfield7').getText()]).toEqual(['200000001', 'R47.00']);
+  }, SLOW);
+});
+
+describe('the month, year and dates follow the month chosen in the app (13 Nov 2026)', () => {
+  it('a March 2027 claim says MARCH 2027, and both dates (top, and next to the signature) are 01/04/2027', async () => {
+    const claim = buildSilClaim({ sessions: [{ date: '2027-03-04', start: t('14:00'), end: t('15:00') }], classes: [], rateCents: parseRand('36.50') }, S);
+    const c: FormContent = { formName: 'EXAMPLE AB', month: 3, year: 2027, submissionDate: firstOfNextMonth(3, 2027), forms: claim.forms, totalMinutes: claim.totalMinutes, rateCents: claim.rateCents, amountCents: claim.amountCents };
+    const f = await describeForm((await fillClaimForm(TEMPLATE, c, S)).files[0]!.bytes);
+    expect(['Textfield4', 'Textfield5', 'DATE0', 'Textfield11', 'DATE2'].map(f.value)).toEqual(['MARCH', '2027', '01/04/2027', '01/04/2027', '04/03/2027']);
+    // Both widgets of the month and year boxes show it.
+    expect(f.fields.get('Textfield4')!.widgets.map((w) => w.look.includes('(MARCH) Tj'))).toEqual([true, true]);
+    expect(f.fields.get('Textfield5')!.widgets.map((w) => w.look.includes('(2027) Tj'))).toEqual([true, true]);
+  }, SLOW);
 });
 
 describe('values that do not fit, and claims longer than the form', () => {
@@ -205,7 +240,7 @@ describe('checking an uploaded blank form', () => {
 
 describe('names and dates', () => {
   it('submits on the 1st of the next month, and names the file after the person', () => {
-    expect([firstOfNextMonth(10, 2026), firstOfNextMonth(12, 2026)]).toEqual(['2026-11-01', '2027-01-01']);
+    expect([firstOfNextMonth(10, 2026), firstOfNextMonth(3, 2027), firstOfNextMonth(12, 2026)]).toEqual(['2026-11-01', '2027-04-01', '2027-01-01']);
     expect(formFileName('MABUNDA YP')).toBe('MABUNDA YP.pdf');
     expect(formFileName('O/NEIL: AB')).toBe('O NEIL AB.pdf');
   });

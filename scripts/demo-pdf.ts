@@ -1,7 +1,7 @@
 // Fills the HRM-05 for made-up SI Leaders, so you can open the result:
 //   EXAMPLE AB - the month from `npm run demo`
 //   EXAMPLE CD - 11 sessions and 4 classes at the same time: 15 lines, so the
-//                classes are combined (at most 3 to a line) and it fits on one form
+//                classes are combined (at most 2 to a line) and it fits on one form
 //   EXAMPLE EF - 15 sessions at different times: nothing can be combined, so
 //                the claim continues on a second form (its own file)
 // It also writes their control list (Excel).

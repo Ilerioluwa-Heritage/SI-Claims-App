@@ -2,7 +2,7 @@
 // checks report. It works from what the readers produced and touches no
 // files, so the website, the phone app and the tests all share it.
 
-import { amountCents, formatHours, formatRand, parseRand } from '../core/money.ts';
+import { parseRand } from '../core/money.ts';
 import { matchName, normaliseName, splitName, type MatchResult, type RosterPerson } from '../core/names.ts';
 import { buildSilClaim, formatDates, type ClaimResult, type NoteKind } from '../core/rules.ts';
 import { LEVELS, type Level, type Settings } from '../core/settings.ts';
@@ -47,7 +47,7 @@ export const CHECK_SECTIONS = {
   filled: 'Times taken from the debrief',
   names: 'Names: spelling matches, and people not on the SI list',
   cap: 'Capped at the monthly limit',
-  midnight: 'Time moved onto the start to finish by 23H30',
+  midnight: 'Time moved onto the start to finish by midnight (00H00)',
   'data-allowance': 'How the data allowance was spread',
   forms: 'Lines combined to fit the form, and second forms',
   'form-text': 'Text wider than its box on the form (cut off on screen and paper; the full text is in the box)',
@@ -68,7 +68,7 @@ export interface PersonResult {
   level: Level | null;
   /** Null if the level on the list isn't one the rates know. */
   rateCents: number | null;
-  /** SI Leaders: their month by the rules. Administrators: null (claimed at a fixed number of hours). */
+  /** Their month by the rules. */
   claim: ClaimResult | null;
   totalMinutes: number;
   /** Null when there's no rate. */
@@ -220,19 +220,25 @@ export function runMonth(input: MonthInputs, settings: Settings): MonthResult {
     const debriefAnswers = fromDebrief.get(person);
 
     if (person.role === 'Admin') {
+      // Rule 9 (SI Administrator, 13 Nov 2026): an administrator's claim comes from the
+      // sessions they observed in the register, not a fixed 80h. How those sessions
+      // become hours is still to be decided, so nothing is claimed yet; the checks
+      // list what they observed.
       if (!person.active) continue;
-      const totalMinutes = settings.adminHours * 60;
-      people.push({ person, level, rateCents, claim: null, totalMinutes, amountCents: rateCents === null ? null : amountCents(totalMinutes, rateCents) });
-      add('admins', who, `Claimed at ${settings.adminHours}h${rateCents === null ? '' : ` x ${formatRand(rateCents)}`}. What goes on an administrator's form lines hasn't been decided yet, so no form is made.`);
       const observedBy = (r: RegisterRow) => {
         const m = r.observer ? match(r.observer) : null;
         return m?.matched ? m.person : null;
       };
-      const observed = input.register.filter((r) => inMonth(r.date) && r.claimed && observedBy(r) === person);
-      if (observed.length) {
-        const byRules = buildSilClaim({ sessions: observed.map((r) => ({ date: r.date, start: r.start!, end: r.end! })), classes: [], rateCents: rateCents ?? 0 }, settings);
-        add('admins', who, `Observed ${observed.length} session${observed.length === 1 ? '' : 's'}: ${formatHours(byRules.uncappedMinutes)}h by the same rules.`);
-      }
+      const observed = input.register
+        .filter((r) => inMonth(r.date) && r.claimed && r.start !== null && r.end !== null && observedBy(r) === person)
+        .sort((a, b) => a.date.localeCompare(b.date) || a.start! - b.start!);
+      const list = observed.map((r) => `${day(r.date)} ${formatTime(r.start!)}-${formatTime(r.end === 0 ? 24 * 60 : r.end!)} (${r.name})`).join(', ');
+      add(
+        'admins',
+        who,
+        `Not claimed yet: how an administrator's claim is worked out from the sessions they observed hasn't been decided. ` +
+          (observed.length ? `Observed ${observed.length} session${observed.length === 1 ? '' : 's'} in the register: ${list}.` : 'Observed no sessions in the register this month.'),
+      );
       if (rateCents === null) add('levels', who, `The list gives the level as "${person.level}", which isn't a level the rates know, so there's no rate.`);
       continue;
     }

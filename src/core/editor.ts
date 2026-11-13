@@ -1,7 +1,7 @@
 // The claim form editor (SI Administrator, 3 Nov 2026): change any HRM-05's
 // lines with typed commands, then work the totals out again. Adding a session
-// applies the generator's rules: rounding, the 2h preparation and the 23H30
-// limit. A change in the data allowance band is pointed out with the command
+// applies the generator's rules: rounding, the 2h preparation and the
+// midnight (00H00) limit. A change in the data allowance band is pointed out with the command
 // that fixes it, never guessed at.
 
 import { parseCommand, type Command, type Target } from './commands.ts';
@@ -9,7 +9,7 @@ import { MONTH_NAMES, isoDate, monthNumber } from './dates.ts';
 import { amountCents, formatHours, formatRand, parseRand } from './money.ts';
 import { combineRows, dataAllowanceHours, formatDates, splitIntoForms, workSession, type ClaimRow, type Note, type Service } from './rules.ts';
 import type { Settings } from './settings.ts';
-import { formatTime, parseTime } from './time.ts';
+import { formatTime, latestEndMinutes, parseTime } from './time.ts';
 
 export interface EditableClaim {
   /** The name as printed on the form ("MABUNDA YP"); null if the form doesn't have one yet. */
@@ -114,7 +114,12 @@ export function recalculate(claim: EditableClaim, settings: Settings): Recalcula
   const capMinutes = settings.monthlyCapHours * 60;
   const capped = uncappedMinutes > capMinutes;
   const totalMinutes = Math.min(uncappedMinutes, capMinutes);
-  if (capped) warnings.push(`${showHours(uncappedMinutes)}h is over the ${settings.monthlyCapHours}h cap, so the amount is worked out on ${settings.monthlyCapHours}h.`);
+  if (capped) {
+    warnings.push(
+      `${showHours(uncappedMinutes)}h is over the ${settings.monthlyCapHours}h cap, so the amount is worked out on ${settings.monthlyCapHours}h. ` +
+        `By the rules, classes come off first, latest first, then any hour left over comes off the data hours: e.g. "remove the class of the ..." or "remove 1 hour from the session of the ...".`,
+    );
+  }
   if (claim.rateCents === null) warnings.push('There is no rate yet. Say "set the rate to R36.50" or "set the level to Honours".');
   if (!claim.month || !claim.year) warnings.push('There is no month yet. Say "the month is October 2026".');
 
@@ -299,8 +304,8 @@ export function applyCommand(claim: EditableClaim, cmd: Command, settings: Setti
       const line = rows[index]!;
       const start = minutesOf(line.timeIn, false);
       const end = minutesOf(line.timeOut, true);
-      const latest = parseTime(settings.latestEndTime);
-      if (start === null || end === null || latest === null) return { error: `The times on that line (${line.timeIn}-${line.timeOut}) can't be read.` };
+      const latest = latestEndMinutes(settings.latestEndTime);
+      if (start === null || end === null) return { error: `The times on that line (${line.timeIn}-${line.timeOut}) can't be read.` };
       let newStart = start;
       let newEnd = end + cmd.minutes;
       if (newEnd > latest) {

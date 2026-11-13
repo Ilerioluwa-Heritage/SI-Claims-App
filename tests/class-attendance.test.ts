@@ -1,7 +1,7 @@
 import { strToU8, zipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETTINGS as S } from '../src/core/index.ts';
-import { readClassAttendance } from '../src/read/class-attendance.ts';
+import { isLecturerEmail, readClassAttendance } from '../src/read/class-attendance.ts';
 import { X } from '../src/read/office.ts';
 
 // A made-up class attendance export, laid out like the real Google Form's.
@@ -25,8 +25,9 @@ function xlsx(rows: (string | number | null)[][]) {
 const HEADINGS = ['Timestamp', 'Email address', 'I am:', 'Name & Surname:', 'Student No:', 'Faculty:', 'School:', 'Level:', 'Module Code', 'Module Name:', 'Date:', 'Date of Lecture:', 'Module/Course:', 'Lecture Time:', "Lecturer's Name:"];
 const OCT_6 = 46301;
 const T11_10 = 670 / 1440;
-const sil = (name: string) => [OCT_6, 'leader@example.com', 'An SI Leader', name, 200000001, 'Science', 'Maths', 3, 'MATH101', 'Maths 1', OCT_6, null, null, null, null];
-const lecturer = (date: number | string, module: string, time: number | string | null) => [OCT_6, 'lecturer@example.com', 'A lecturer', null, null, null, null, null, null, null, null, date, module, time, 'Dr Made Up'];
+const sil = (name: string, email = '200000001@keyaka.ul.ac.za') => [OCT_6, email, 'An SI Leader', name, 200000001, 'Science', 'Maths', 3, 'MATH101', 'Maths 1', OCT_6, null, null, null, null];
+const lecturer = (date: number | string, module: string, time: number | string | null, email = 'made.up@ul.ac.za') =>
+  [OCT_6, email, 'A lecturer', null, null, null, null, null, null, null, null, date, module, time, 'Dr Made Up'];
 
 describe("reading one SI Leader's class attendance", () => {
   it("takes classes only from the lecturer's rows: date of lecture, module and lecture time", () => {
@@ -35,10 +36,32 @@ describe("reading one SI Leader's class attendance", () => {
     expect(file.classes.map((c) => `${c.name} ${c.date} ${c.module} ${c.start}`)).toEqual(['EXAMPLE AB 2026-10-06 MATH101 670', 'EXAMPLE AB 2026-10-13 MATH101 670']);
   });
 
-  it("never reads the email, student number or lecturer's name", () => {
-    const file = readClassAttendance(xlsx([HEADINGS, sil('Example AB'), lecturer(OCT_6, 'MATH101', T11_10)]), 'a.xlsx', S);
+  it("keeps no email address, student number or lecturer's name", () => {
+    const file = readClassAttendance(xlsx([HEADINGS, sil('Example AB'), lecturer(OCT_6, 'MATH101', T11_10), lecturer(OCT_6, 'STAT101', T11_10, 'someone@example.com')]), 'a.xlsx', S);
     const all = JSON.stringify(file);
-    for (const secret of ['example.com', '200000001', 'Dr Made Up']) expect(all).not.toContain(secret);
+    for (const secret of ['made.up', 'someone', 'example.com', 'keyaka', '200000001', 'Dr Made Up']) expect(all).not.toContain(secret);
+  });
+
+  it('a lecturer answers from exactly @ul.ac.za or @gmail.com (13 Nov 2026)', () => {
+    const domains = S.lecturerEmailDomains;
+    for (const email of ['made.up@ul.ac.za', 'Made.Up@UL.AC.ZA ', 'lecturer@gmail.com']) expect(isLecturerEmail(email, domains)).toBe(true);
+    for (const email of ['200000001@keyaka.ul.ac.za', 'x@ul.ac.za.example.com', 'x@googlemail.com', 'x@yahoo.com', 'ul.ac.za', '']) expect(isLecturerEmail(email, domains)).toBe(false);
+  });
+
+  it('counts a gmail lecturer, ignores the SI Leader\'s own rows (no lecture time) and flags a time from any other email', () => {
+    const file = readClassAttendance(
+      xlsx([
+        HEADINGS,
+        sil('Example AB', 'example.ab@gmail.com'), // an SI Leader on gmail, but no lecture time: their own row
+        lecturer(OCT_6, 'MATH101', T11_10, 'lecturer@gmail.com'),
+        lecturer('13/10/2026', 'MATH101', '11:10', '200000001@keyaka.ul.ac.za'), // a time, but from a student's email
+      ]),
+      'x.xlsx',
+      S,
+    );
+    expect(file.name).toBe('EXAMPLE AB');
+    expect(file.classes.map((c) => c.date)).toEqual(['2026-10-06']);
+    expect(file.problems).toEqual(["x.xlsx, row 4: it gives a lecture time, but it wasn't sent from a lecturer's email (@ul.ac.za or @gmail.com), so this class isn't claimed."]);
   });
 
   it("uses the file's name when the SI Leader's rows don't give one", () => {
@@ -52,14 +75,14 @@ describe("reading one SI Leader's class attendance", () => {
     expect(file.problems).toEqual(["x.xlsx: the SI Leader's name is written in different ways (EXAMPLE AB, SAMPLE CD), so these classes aren't claimed until it's clear whose they are."]);
   });
 
-  it("flags a lecturer's row with no readable time", () => {
-    const file = readClassAttendance(xlsx([HEADINGS, sil('Example AB'), lecturer(OCT_6, 'MATH101', null)]), 'x.xlsx', S);
+  it("flags a lecturer's row with a time that can't be read", () => {
+    const file = readClassAttendance(xlsx([HEADINGS, sil('Example AB'), lecturer(OCT_6, 'MATH101', 'after lunch')]), 'x.xlsx', S);
     expect(file.problems).toEqual(["x.xlsx, row 3: the lecturer's lecture time can't be read, so this class isn't claimed."]);
   });
 
   it('names a missing column plainly', () => {
     expect(() => readClassAttendance(xlsx([['I am:', 'Name & Surname:']]), 'x.xlsx', S)).toThrow(
-      'x.xlsx has no column called "Date of Lecture:" or "Module/Course:" or "Lecture Time:". Check the class attendance column names in the settings.',
+      'x.xlsx has no column called "Email address" or "Date of Lecture:" or "Module/Course:" or "Lecture Time:". Check the class attendance column names in the settings.',
     );
   });
 });

@@ -15,7 +15,7 @@ Every run needs all three files, uploaded fresh each month. It won't start if an
    - A debrief with no session in the register is **not claimed**, but flagged, because a session might be missing from the register.
 
    The debrief also fills in missing register times. Its contact-details column is never read.
-3. **Class attendance (lecturers' records).** These are the Google Form responses in Excel, one file per SI Leader; upload them all at once. Classes are taken only from the lecturer's rows ("I am: A lecturer"): their date of lecture, module and lecture time. The SI Leader's own rows are read only for their name, to know whose file it is. The email, student number and lecturer's name are never read.
+3. **Class attendance (lecturers' records).** These are the Google Form responses in Excel, one file per SI Leader; upload them all at once. Classes are taken only from the lecturer's rows: their date of lecture, module and lecture time. A row is the lecturer's when it was sent from an email ending exactly in `@ul.ac.za` or `@gmail.com` (a student's `@keyaka.ul.ac.za` doesn't count) **and** it gives a lecture time, which only the lecturer fills in. A row with a lecture time from any other email isn't claimed and is flagged. The SI Leader's own rows are read only for their name, to know whose file it is. Of the email, only the part after the @ is looked at; the address itself is never kept or shown. The student number and lecturer's name are never read.
 
 ## What you upload once, and replace when there's a new version
 
@@ -64,25 +64,32 @@ The editor reads only the boxes this program fills: name, month, year, rate, tot
 
 The app understands the commands itself, so nothing is sent to an AI service and the form's personal details stay on the device.
 
-Adding a session applies the same rules as the generator (decided 3 Nov 2026). "2hrs that began at 18H00" is rounded and gets the 2h preparation added: 18H00–22H00, 4h. It also ends by 23H30, with any extra moved onto the start. If the change moves the SI Leader into a different data allowance band (e.g. 4 → 5 sessions), the editor says so and shows the command to add or remove that hour, rather than guessing which line it belongs on.
+Adding a session applies the same rules as the generator (decided 3 Nov 2026). "2hrs that began at 18H00" is rounded and gets the 2h preparation added: 18H00–22H00, 4h. It also ends by midnight (00H00), with any extra moved onto the start. If the change moves the SI Leader into a different data allowance band (e.g. 4 → 5 sessions), the editor says so and shows the command to add or remove that hour, rather than guessing which line it belongs on.
 
 ### Decisions still open (these affect what goes on the form)
 
 1. **Data allowance with only one session.** Right now that session gets both hours.
-2. **The 80-hour cap.** The total is capped, but which lines are reduced so the lines still add up to 80 hasn't been decided.
-3. **Administrators' forms.** The total is fixed at 80 hours, but what goes on each line hasn't been decided.
+2. **Administrators' claims (rule 9).** They are no longer claimed at 80 hours. Their claim comes from the sessions they observed in the daily register (its Observer column), but how those sessions become hours and lines is still to be decided. Until then no administrator is claimed; the checks report lists each session they observed (date, times and SI Leader).
+3. **A month still over 80h after the cap rule.** If taking off every class and every data hour still leaves more than 80h, the claim is flagged and no form is filled.
 4. **The SI list doesn't cover everyone who worked in October.** Until it's updated, people not on it get their name and level from the debrief (see Decided). That doesn't cover RAMOLOTO CB, who claims only classes and has no debrief, so their classes can't be matched.
 5. **Administrators' levels.** They aren't on the SI list, so their rate is unknown until their levels are added to `admins` in `src/core/settings.ts`.
 
 ### Decided
 
-- **Fitting the form (3 Nov 2026).** The form has 13 lines. With more lines:
-  1. Class lines with the same times are combined, at most 3 classes to a line.
+- **Start times (13 Nov 2026).** A start on :15 or :45 now rounds forward (15h15 → 15H30, 15h45 → 16H00). End times are rounded as before.
+- **Midnight (13 Nov 2026).** Nothing ends after 00H00 (it was 23H30). A line can end at 00H00; any extra moves onto the start.
+- **Lecturers' rows (13 Nov 2026).** Told apart by email domain (`@ul.ac.za` or `@gmail.com`, exactly) plus a lecture time; see "What you upload each month".
+- **The 80-hour cap (13 Nov 2026).** Over 80h, class attendances come off first, latest date first, 2h each, while the month is still at least 2h over. What's left (e.g. 1h for an 81h month) comes off the data allowance hours, from the latest session that has them. The lines then add up to exactly 80h. Everything taken off is listed in the checks report.
+- **Fitting the form (13 Nov 2026).** The form has 13 lines. With more lines:
+  1. Class lines with the same times are combined, at most 2 classes to a line.
   2. If that's still too many, SI session lines with the same times are combined, at most 2 sessions to a line.
-  3. Only if it still doesn't fit does the claim continue on a second form: an untouched copy saved as `NAME (form 2).pdf`, showing the same totals.
+  3. If it still doesn't fit, **nothing is combined**: every session and class gets its own line, the first 13 on the first form and the rest on a second form, an untouched copy saved as `NAME (form 2).pdf`, showing the same totals.
 
-  If even two forms can't hold it, no form is filled and it's flagged for your decision, e.g. in the editor. No line is ever dropped. The limits (3, 2 and 2 forms) can be changed in `src/core/settings.ts`.
-- **Two classes on one day (3 Nov 2026)** keep sharing a line (`07H40/14H00`), even though the form's TIME OUT box cuts off the second time at the form's own font size. The checks report flags it.
+  If even two forms can't hold it, no form is filled and it's flagged for your decision, e.g. in the editor. No line is ever dropped. The limits (2, 2 and 2 forms) can be changed in `src/core/settings.ts`.
+- **The form itself (13 Nov 2026).** The app never changes the form's structure: every box stays a fillable, editable text box, in the form's own font, size and style, before and after.
+- **Dates, month and year (13 Nov 2026).** The date at the top (next to the UL student number) and the date next to the claimant's signature are always the 1st of the next month (October 2026 → 01/11/2026, March 2027 → 01/04/2027, December 2026 → 01/01/2027). The MONTH and YEAR boxes are the month chosen in the app. The editor sets both dates the same way when it saves a form.
+- **Approver's personnel number (13 Nov 2026).** Left blank. PROF O CHABAYA's name stays; the editor also clears the number from an older form.
+- **Two classes on one day (3 Nov 2026, confirmed 13 Nov 2026)** keep sharing a line (`07H40/14H00`), also when nothing else is combined, even though the form's TIME OUT box cuts off the second time at the form's own font size. The checks report flags it.
 
 - **Class attendance (2 Nov 2026).** Classes come only from the lecturers' records, not the SI Leaders' own records. Each class line shows the lecturer's actual lecture time, not rounded (11H10–13H10).
 - **Coloured register rows (2 Nov 2026).** Red (session cancelled) and green (students did not attend) rows are left out of the claim. Purple (not observed) and uncoloured rows are claimed. A colour the system doesn't know is flagged and not claimed. The colours can be changed in `src/core/settings.ts`.
@@ -100,10 +107,10 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 |---|---|
 | `src/core/` | **The claim rules, and the only place they live.** The website, the phone app and the tests all use these files. |
 | `src/core/sources.ts` | The files the app works from: three uploaded every month, and two kept until replaced. |
-| `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 23H30 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
-| `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver, and the lines. The cell number, student number, address, bank, account, branch, signatures and the approver row stay blank. It fills one form per person, or two when the rules call for a second; each is an untouched copy of the form. It also checks a newly uploaded form. |
+| `src/core/settings.ts` | Rates, prep hours, data allowance bands, the cap, the 00H00 limit, the register's colours and column headings, and the fixed text on the form (G082, PROF O CHABAYA and so on). |
+| `src/pdf/fill.ts` | Fills the uploaded HRM-05 without changing the form: each value is drawn in the box's own font and size, and the form's bytes are kept as they are. It fills only the fields on its list: name, dates, school, cost centre, month, year, hours, rate, amount, approver's name, and the lines. The cell number, student number, address, bank, account, branch, signatures, the approver's personnel number and the approver row stay blank. It fills one form per person, or two when the rules call for a second; each is an untouched copy of the form. It also checks a newly uploaded form. |
 | `tests/fixtures/HRM-05 blank.pdf` | A copy of the blank form, used only by the tests and the samples. The app uses the one you upload. |
-| `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by 23H30, the data allowance, combined lines and second forms, and administrators. |
+| `src/run/month.ts` | One month, start to finish. It matches every name to the levels list and works out each person's claim. It also builds the checks report, in this order: names that couldn't be matched, register rows that couldn't be read, debriefs with no register session, the side note of register sessions with no debrief, levels and rates, rows left out by colour, times taken from the debrief, spelling matches, the cap, time moved to finish by midnight, the data allowance, combined lines and second forms, and administrators. |
 | `web/` | The website's screens, on one page that also works on a phone: month, kept files, this month's files, check, summary, checks, claim forms and downloads. Everything runs in your browser. Monthly files aren't kept; the blank form is kept on this device until you remove it. |
 | `web/public/` | What makes it installable: `manifest.webmanifest` (name, icons, opens full screen), `sw.js` (keeps the app's own files on the device so it works offline; never your uploads), and `icons/`. Also `_headers`: the browser rules for the online site. The page may only connect to its own site, so uploaded files can't be sent anywhere. |
 | `functions/_middleware.ts`, `src/gate/access.ts` | The online site's own sign-in check. Before Cloudflare sends any page or file, it checks that Cloudflare Access signed the visitor in. If Access is ever switched off or set up wrongly, the site stays closed. |
@@ -111,7 +118,7 @@ Adding a session applies the same rules as the generator (decided 3 Nov 2026). "
 | `web/src/Editor.tsx` | The claim form editor's screen. |
 | `src/out/checks-report.ts` | The checks report as a page to download, open in a browser and print. It never contains a student number. |
 | `src/out/control-list.ts` | The Excel control list: the brief's columns, alphabetical by surname, with `TOTAL AMOUNT` as the live formula `=F2*G2`. `STUDENT NO:` comes from the levels list, and the bank columns are left empty. |
-| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. `levels-list.ts` reads only the SI list's name, student number and level columns, never "Contact". `class-attendance.ts` reads only the lecturers' rows' date, module and time, plus the SI Leader's name. Rows it can't read with certainty are flagged, never guessed. |
+| `src/read/` | Reads the uploaded files. `register.ts` reads the Word register. `debrief.ts` reads only the debrief's date, name, module, level and time columns. `levels-list.ts` reads only the SI list's name, student number and level columns, never "Contact". `class-attendance.ts` reads only the lecturers' rows' date, module and time (a lecturer's row: a `@ul.ac.za` or `@gmail.com` email and a lecture time), plus the SI Leader's name. Rows it can't read with certainty are flagged, never guessed. |
 | `tests/` | Automated checks for every rule, including the edge cases. The reading tests use made-up documents only. |
 | `src/core/commands.ts`, `src/core/editor.ts` | The claim form editor: reads typed commands, changes the lines, and works the totals out again. |
 | `scripts/demo.ts` | A made-up SI Leader's month, worked through step by step. |
@@ -153,8 +160,8 @@ You need Node.js and Git. They were installed on 2 November 2026.
 
 6. **See filled claim forms.** This fills the HRM-05 for made-up people and saves them in the `local-data` folder. Open them in your usual PDF reader.
    - `EXAMPLE AB.pdf` is the demo month.
-   - `EXAMPLE CD.pdf` has 15 lines, so its four classes at the same time are combined into 2 lines (3 classes, then 1), and it fits on one form.
-   - `EXAMPLE EF.pdf` and `EXAMPLE EF (form 2).pdf` have 15 sessions at different times. Nothing can be combined, so the claim continues on a second form.
+   - `EXAMPLE CD.pdf` has 15 lines, so its four classes at the same time are combined into 2 lines (2 classes each), and it fits on one form.
+   - `EXAMPLE EF.pdf` and `EXAMPLE EF (form 2).pdf` have 15 sessions at different times. Nothing can be combined, so the claim continues on a second form, one session per line.
    - `EXAMPLE control list.xlsx` is the control list for these three. Click a TOTAL AMOUNT cell to see its formula.
 
     To try a different blank form, put its path after `--`, e.g. `npm run demo:pdf -- "C:\path\to\form.pdf"`:
@@ -297,13 +304,14 @@ click **⋯** → **Rollback to this deployment**.
 Full details are in `src/core/rules.ts`, with a comment on every rule.
 
 1. The daily register is the source of truth for session times.
-2. Times are rounded to the half hour first. A start on :15 or :45 goes back; an end on :15 or :45 goes forward.
+2. Times are rounded to the half hour first. A start or an end on :15 or :45 goes forward (:00–:14 goes back to :00, :15–:44 to :30, :45–:59 to the next hour).
 3. 2 hours of preparation are added to every SI session.
 4. Data allowance: 1-4 sessions get 2h, 5-8 get 3h, 9 or more get 4h. It's given one hour per session, starting from the earliest session.
-5. Added hours extend the end time. Nothing may end after 23H30; any extra moves onto the start time instead.
-6. Classes come only from the lecturers' class attendance records. Each class is worth 2h from the lecturer's actual lecture start, which isn't rounded (11H10–13H10). Two classes on one day share a line.
+5. Added hours extend the end time. Nothing may end after midnight (00H00); any extra moves onto the start time instead.
+6. Classes come only from the lecturers' class attendance records: rows sent from a `@ul.ac.za` or `@gmail.com` email that give a lecture time. Each class is worth 2h from the lecturer's actual lecture start, which isn't rounded (11H10–13H10). Two classes on one day share a line.
 7. SI sessions come first, then classes, each in date order.
-8. The total is capped at 80 hours.
-9. Administrators are claimed at 80 hours.
+8. The total is capped at 80 hours. Over that, classes come off first, latest first (2h each), then any hour left over comes off the data allowance hours, latest session first, so the lines add up to exactly 80h.
+9. Administrators are claimed from the sessions they observed in the register. How is still to be decided, so for now they aren't claimed and the checks report lists what they observed.
 10. Money = hours × rate, rounded half-up to the cent, using exact arithmetic.
-11. The form has 13 lines. With more lines, class lines with the same times are combined first, up to 3 to a line (`10&14&17/09/2026`). Then, if needed, SI session lines with the same times are combined, up to 2 to a line. Only then does a second form follow. Anything beyond two forms is flagged for your decision.
+11. The form has 13 lines. With more lines, class lines with the same times are combined first, up to 2 to a line (`10&14/09/2026`). Then, if needed, SI session lines with the same times are combined, up to 2 to a line. If that still doesn't fit, nothing is combined: one line per session or class, 13 on the first form and the rest on a second. Anything beyond two forms is flagged for your decision.
+12. The form is never changed: every box stays fillable, in the form's own font and size. The two dates are the 1st of the next month, the month and year are the month chosen in the app, and the approver's personnel number is left blank.

@@ -4,7 +4,7 @@
 
 import { amountCents } from './money.ts';
 import type { AllowanceBand, Settings } from './settings.ts';
-import { formatTime, parseTime, roundEnd, roundStart } from './time.ts';
+import { formatTime, latestEndMinutes, roundEnd, roundStart } from './time.ts';
 
 /** One SI session from the daily register (rule 1: the register is the source of truth). */
 export interface SiSession {
@@ -61,8 +61,20 @@ export interface Note {
   message: string;
 }
 
+/** What rule 8 took off to bring the month down to the cap. */
+export interface CapWorking {
+  /** Classes taken off, latest first. */
+  removedClasses: ClassRecord[];
+  /** Data allowance minutes taken off, per session date, latest first. */
+  dataCut: { date: string; minutes: number }[];
+  /** Minutes still over the cap after that (needs the administrator's decision; no form is filled). */
+  stillOver: number;
+}
+
 export interface ClaimResult {
   sessions: SessionWorking[];
+  /** Set when the month was over the cap (rule 8). */
+  cap: CapWorking | null;
   /** Lines in form order (SI sessions, then classes), combined if they didn't fit. */
   rows: ClaimRow[];
   /**
@@ -73,7 +85,7 @@ export interface ClaimResult {
   dataAllowanceHours: number;
   /** Sum of all lines before the monthly cap. */
   uncappedMinutes: number;
-  /** Hours actually claimed, after the cap. */
+  /** Hours actually claimed, after the cap: the lines add up to this. */
   totalMinutes: number;
   capped: boolean;
   rateCents: number;
@@ -123,8 +135,7 @@ export function workSession(
   dataHours: number,
   settings: Settings,
 ): SessionWorking {
-  const latestEnd = parseTime(settings.latestEndTime);
-  if (latestEnd === null) throw new Error(`Latest end time "${settings.latestEndTime}" is not a time`);
+  const latestEnd = latestEndMinutes(settings.latestEndTime);
 
   const rawEnd = session.end === 0 && session.start > 0 ? 24 * 60 : session.end;
   const roundedStart = roundStart(session.start);
@@ -170,14 +181,9 @@ export function isValidSession(s: SiSession): boolean {
 // record isn't used. Times are the actual lecture start, not rounded.
 // ---------------------------------------------------------------------------
 
-/**
- * Each class the lecturer recorded is worth `classHours`, from the actual
- * lecture start (not rounded): 11H10 in, 13H10 out. Classes on the same day
- * share one line: "07H40/14H10" in, "09H40/16H10" out, hours added together.
- */
-export function classRows(classes: ClassRecord[], settings: Settings, notes: Note[]): ClaimRow[] {
-  const classMinutes = settings.classHours * 60;
-  const byDate = new Map<string, number[]>();
+/** The classes in date order, each counted once (a class recorded twice is noted). */
+export function uniqueClasses(classes: ClassRecord[], notes: Note[]): ClassRecord[] {
+  const out: ClassRecord[] = [];
   const seen = new Set<string>();
   for (const c of [...classes].sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start)) {
     // Same module, same day, starts in the same half hour: one class recorded twice.
@@ -187,8 +193,20 @@ export function classRows(classes: ClassRecord[], settings: Settings, notes: Not
       continue;
     }
     seen.add(key);
-    byDate.set(c.date, [...(byDate.get(c.date) ?? []), c.start]);
+    out.push(c);
   }
+  return out;
+}
+
+/**
+ * Each class the lecturer recorded is worth `classHours`, from the actual
+ * lecture start (not rounded): 11H10 in, 13H10 out. Classes on the same day
+ * share one line: "07H40/14H10" in, "09H40/16H10" out, hours added together.
+ */
+export function classRows(classes: ClassRecord[], settings: Settings, notes: Note[]): ClaimRow[] {
+  const classMinutes = settings.classHours * 60;
+  const byDate = new Map<string, number[]>();
+  for (const c of uniqueClasses(classes, notes)) byDate.set(c.date, [...(byDate.get(c.date) ?? []), c.start]);
   return [...byDate].map(([date, starts]) => ({
     dates: [date],
     service: 'CLASS ATTENDANCE' as const,
@@ -203,13 +221,21 @@ export function classRows(classes: ClassRecord[], settings: Settings, notes: Not
 // ---------------------------------------------------------------------------
 
 /**
- * Rule 11 (SI Administrator, 3 Nov 2026). The form has 13 lines. If there are
+ * Rule 11 (SI Administrator, 13 Nov 2026). The form has 13 lines. If there are
  * more, class attendance lines with the same time in and time out are combined
- * first, at most 3 to a line; if that's still too many, SI session lines with
+ * first, at most 2 to a line; if that's still too many, SI session lines with
  * the same times are combined, at most 2 to a line. Dates are joined with "&"
  * and hours added; a combined line sits where the first of its dates was.
+ *
+ * If even that doesn't fit on one form, nothing is combined at all: every
+ * session and every class gets its own line, the first 13 on the first form
+ * and the rest on the second (splitIntoForms). Lines that were already
+ * combined (e.g. on a form read into the editor) are split back into one line
+ * per date. Two classes on the same day still share their line (rule 6).
  */
 export function combineRows(rows: ClaimRow[], settings: Settings, notes: Note[]): ClaimRow[] {
+  if (rows.length <= settings.rowsPerPage) return rows;
+  const tried: Note[] = [];
   let result = rows;
   const steps = [
     ['CLASS ATTENDANCE', settings.maxClassesPerLine],
@@ -217,9 +243,25 @@ export function combineRows(rows: ClaimRow[], settings: Settings, notes: Note[])
   ] as const;
   for (const [service, most] of steps) {
     if (result.length <= settings.rowsPerPage) break;
-    result = combineService(result, service, most, notes);
+    result = combineService(result, service, most, tried);
   }
-  return result;
+  if (result.length <= settings.rowsPerPage) {
+    notes.push(...tried);
+    return result;
+  }
+  const separate = rows.flatMap(oneLinePerDate);
+  notes.push({
+    kind: 'combined',
+    message: `${result.length} lines even after combining, more than one form holds, so nothing is combined: ${separate.length} lines, one per session or class, over two forms`,
+  });
+  return separate;
+}
+
+/** A combined line ("07&08/10/2026") back as one line per date, when its hours split evenly. */
+function oneLinePerDate(r: ClaimRow): ClaimRow[] {
+  if (r.dates.length < 2 || r.minutes % r.dates.length !== 0) return [r];
+  const each = r.minutes / r.dates.length;
+  return r.dates.map((d) => ({ ...r, dates: [d], minutes: each }));
 }
 
 /** Lines of one service with the same time in and time out, combined at most `most` to a line, in date order. */
@@ -252,7 +294,8 @@ function combineService(rows: ClaimRow[], service: Service, most: number, notes:
 
 /**
  * Only when combining isn't enough do the lines continue on a second form,
- * a complete copy of it (at most settings.maxForms). If even that can't hold
+ * a complete copy of it (at most settings.maxForms), one line per session or
+ * class (see combineRows). If even that can't hold
  * them, no form is filled and it's flagged for the administrator to decide
  * (for example in the claim form editor); no line is ever dropped.
  */
@@ -262,7 +305,7 @@ export function splitIntoForms(rows: ClaimRow[], settings: Settings, notes: Note
   if (forms.length > settings.maxForms) {
     notes.push({
       kind: 'too-many-lines',
-      message: `${rows.length} lines even after combining; ${settings.maxForms} forms hold ${settings.maxForms * settings.rowsPerPage}. This needs your decision before the forms can be filled.`,
+      message: `${rows.length} lines; ${settings.maxForms} forms hold ${settings.maxForms * settings.rowsPerPage}. This needs your decision before the forms can be filled.`,
     });
     return [];
   }
@@ -288,6 +331,51 @@ export function formatDates(dates: string[]): string {
 // One SIL's month, all rules in order
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Rule 8: the monthly cap (SI Administrator, 13 Nov 2026)
+// ---------------------------------------------------------------------------
+
+/**
+ * Brings a month over the cap back down to it. Classes are taken off first,
+ * latest first, while the month is still at least one class over. What's left
+ * (e.g. 1h for an 81h month) comes off the data allowance hours, from the
+ * latest session with data hours backwards. If the month is still over after
+ * all of that, it's flagged and left for the administrator.
+ * `sessions` and `classes` are in date order; neither is changed.
+ */
+export function applyCap(
+  valid: SiSession[],
+  sessions: SessionWorking[],
+  classes: ClassRecord[],
+  settings: Settings,
+): { sessions: SessionWorking[]; classes: ClassRecord[]; cap: CapWorking } {
+  const classMinutes = settings.classHours * 60;
+  const capMinutes = settings.monthlyCapHours * 60;
+  const total = (ss: SessionWorking[], cs: ClassRecord[]) => ss.reduce((n, w) => n + w.minutes, 0) + cs.length * classMinutes;
+
+  const kept = [...classes];
+  const removedClasses: ClassRecord[] = [];
+  while (kept.length && total(sessions, kept) - capMinutes >= classMinutes) removedClasses.push(kept.pop()!);
+
+  const worked = [...sessions];
+  const dataCut: CapWorking['dataCut'] = [];
+  // Less than one class over (e.g. 81h), or no classes left: take the rest off the data hours.
+  let over = total(worked, kept) - capMinutes;
+  for (let i = worked.length - 1; i >= 0 && over > 0; i--) {
+    const w = worked[i]!;
+    if (!w.dataMinutes) continue;
+    const cut = Math.min(over, w.dataMinutes);
+    worked[i] = workSession(valid[i]!, (w.dataMinutes - cut) / 60, settings);
+    dataCut.push({ date: w.date, minutes: cut });
+    over -= cut;
+  }
+  return { sessions: worked, classes: kept, cap: { removedClasses, dataCut, stillOver: Math.max(0, over) } };
+}
+
+// ---------------------------------------------------------------------------
+// One SIL's month, all rules in order
+// ---------------------------------------------------------------------------
+
 /** `classes` are this SIL's lines from the lecturers' class attendance records. */
 export function buildSilClaim(
   input: { sessions: SiSession[]; classes: ClassRecord[]; rateCents: number },
@@ -304,7 +392,7 @@ export function buildSilClaim(
 
   const allowance = dataAllowanceHours(valid.length, settings.dataAllowanceBands);
   const spread = spreadAllowance(allowance, valid.length);
-  const sessions = valid.map((s, i) => workSession(s, spread[i]!, settings));
+  let sessions = valid.map((s, i) => workSession(s, spread[i]!, settings));
   if (allowance > 0) {
     const given = sessions.flatMap((w) => (w.dataMinutes ? [`${w.date} +${w.dataMinutes / 60}h`] : []));
     notes.push({
@@ -312,6 +400,28 @@ export function buildSilClaim(
       message: `${valid.length} sessions -> ${allowance}h data allowance: ${given.join(', ')}`,
     });
   }
+
+  let classes = uniqueClasses(input.classes, notes);
+  const classMinutes = settings.classHours * 60;
+  const uncappedMinutes = sessions.reduce((n, w) => n + w.minutes, 0) + classes.length * classMinutes;
+  const capMinutes = settings.monthlyCapHours * 60;
+  const capped = uncappedMinutes > capMinutes;
+  let cap: CapWorking | null = null;
+  if (capped) {
+    ({ sessions, classes, cap } = applyCap(valid, sessions, classes, settings));
+    const parts = [
+      cap.removedClasses.length
+        ? `${cap.removedClasses.length} class${cap.removedClasses.length === 1 ? '' : 'es'} taken off (${[...cap.removedClasses].reverse().map((c) => `${c.module} ${formatDates([c.date])} ${formatTime(c.start)}`).join(', ')})`
+        : '',
+      cap.dataCut.length ? `${cap.dataCut.map((d) => `${d.minutes / 60}h data taken off ${formatDates([d.date])}`).join(', ')}` : '',
+    ].filter(Boolean);
+    notes.push({
+      kind: 'cap',
+      message: `${uncappedMinutes / 60}h worked, over the ${settings.monthlyCapHours}h cap: ${parts.join('; ') || 'nothing could be taken off'}` +
+        (cap.stillOver ? `. Still ${cap.stillOver / 60}h over with no classes or data hours left to take off; this needs your decision before the form can be filled.` : ''),
+    });
+  }
+
   for (const w of sessions) {
     if (w.movedToStart) {
       notes.push({
@@ -329,24 +439,16 @@ export function buildSilClaim(
     minutes: w.minutes,
   }));
   // Rule 7: SI sessions first in date order, then classes in date order.
-  const allRows = [...siRows, ...classRows(input.classes, settings, notes)];
-
-  const uncappedMinutes = allRows.reduce((sum, r) => sum + r.minutes, 0);
-  const capMinutes = settings.monthlyCapHours * 60;
-  const capped = uncappedMinutes > capMinutes;
-  const totalMinutes = Math.min(uncappedMinutes, capMinutes);
-  if (capped) {
-    // AWAITING DECISION: which lines are reduced so the lines add up to the cap.
-    notes.push({
-      kind: 'cap',
-      message: `${uncappedMinutes / 60}h worked, capped at ${settings.monthlyCapHours}h`,
-    });
-  }
+  const allRows = [...siRows, ...classRows(classes, settings, [])];
+  // The lines add up to the cap, unless it couldn't be reached (flagged above; no form is filled).
+  const totalMinutes = Math.min(allRows.reduce((sum, r) => sum + r.minutes, 0), capMinutes);
 
   const rows = combineRows(allRows, settings, notes);
-  const forms = splitIntoForms(rows, settings, notes);
+  const fitted = splitIntoForms(rows, settings, notes);
+  const forms = cap?.stillOver ? [] : fitted;
   return {
     sessions,
+    cap,
     rows,
     forms,
     dataAllowanceHours: allowance,

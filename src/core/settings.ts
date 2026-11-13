@@ -34,11 +34,13 @@ export interface LevelsListColumns {
 
 /**
  * Column headings in a class attendance export (one per SI Leader), by meaning.
- * Only these columns are ever read: never the email, student number or lecturer's name.
+ * Only these columns are ever read: never the student number or lecturer's
+ * name. Of the email, only the part after the @ is looked at, to tell a
+ * lecturer's row from the SI Leader's; the address itself is never kept.
  */
 export interface ClassColumns {
-  /** "I am:": who answered, the SI Leader or the lecturer. */
-  role: string;
+  /** The email address that answered; its domain says whether it's a lecturer's row (rule 6). */
+  email: string;
   /** The SI Leader's name, on their own rows; it says whose file this is. */
   name: string;
   date: string;
@@ -46,7 +48,7 @@ export interface ClassColumns {
   start: string;
 }
 
-/** An administrator, claimed at a fixed number of hours (rule 9). Not on the list of SI Leaders. */
+/** An administrator (rule 9). Not on the list of SI Leaders. */
 export interface Admin {
   /** As printed on the form, e.g. "OSOFEKUN SI". */
   name: string;
@@ -71,14 +73,12 @@ export interface Settings {
   prepHoursPerSession: number;
   /** Monthly data allowance by number of SI sessions (rule 4). Highest matching band wins. */
   dataAllowanceBands: AllowanceBand[];
-  /** Latest end time allowed on a claim (rule 5), e.g. "23H30". */
+  /** Latest end time allowed on a claim (rule 5). "00H00" means midnight at the end of the day. */
   latestEndTime: string;
   /** Hours credited for each confirmed class (rule 6). */
   classHours: number;
   /** Monthly cap per person (rule 8). */
   monthlyCapHours: number;
-  /** Hours claimed for each administrator (rule 9). */
-  adminHours: number;
   /** Usable session lines on one HRM-05 page (rule 11). */
   rowsPerPage: number;
   /** Rule 11: at most this many class attendances combined into one line. */
@@ -98,8 +98,12 @@ export interface Settings {
   debriefLevels: Record<string, Level>;
   levelsListColumns: LevelsListColumns;
   classColumns: ClassColumns;
-  /** The answer to "I am:" on the lecturer's rows; only those rows are counted (rule 6). */
-  lecturerAnswer: string;
+  /**
+   * Email domains a lecturer answers from (rule 6). A row is a lecturer's if
+   * its email ends in exactly one of these (so "@keyaka.ul.ac.za" doesn't
+   * count for "ul.ac.za") and it gives a lecture time.
+   */
+  lecturerEmailDomains: string[];
   /** Each level as written on the list of SI Leaders, and the level of study (so the rate) it means. */
   listLevels: Record<string, Level>;
   /** The administrators (rule 9). Keep this list and their levels up to date here. */
@@ -115,8 +119,8 @@ export interface Settings {
   costCentreNo: string;
   costCentreName: string;
   programmeName: string;
+  /** The approver's name. Their personnel number is left blank (SI Administrator, 13 Nov 2026). */
   signatoryName: string;
-  signatoryPersonnelNo: string;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -138,13 +142,14 @@ export const DEFAULT_SETTINGS: Settings = {
     { minSessions: 5, hours: 3 },
     { minSessions: 9, hours: 4 },
   ],
-  latestEndTime: '23H30',
+  // SI Administrator, 13 Nov 2026: nothing ends after midnight (was 23H30).
+  latestEndTime: '00H00',
   classHours: 2,
   monthlyCapHours: 80,
-  adminHours: 80,
   rowsPerPage: 13,
-  // SI Administrator, 3 Nov 2026: combine up to 3 classes or 2 sessions per line, then a 2nd form.
-  maxClassesPerLine: 3,
+  // SI Administrator, 13 Nov 2026: combine at most 2 classes or 2 sessions per line;
+  // if that still doesn't fit, nothing is combined and the claim goes onto a 2nd form.
+  maxClassesPerLine: 2,
   maxSessionsPerLine: 2,
   maxForms: 2,
   // SI Administrator, 2 Nov 2026: cancelled and no-students rows are not claimed.
@@ -184,13 +189,14 @@ export const DEFAULT_SETTINGS: Settings = {
     level: 'Level of Study',
   },
   classColumns: {
-    role: 'I am:',
+    email: 'Email address',
     name: 'Name & Surname:',
     date: 'Date of Lecture:',
     module: 'Module/Course:',
     start: 'Lecture Time:',
   },
-  lecturerAnswer: 'A lecturer',
+  // SI Administrator, 13 Nov 2026: lecturers answer from a UL staff or a Gmail address.
+  lecturerEmailDomains: ['ul.ac.za', 'gmail.com'],
   listLevels: {
     '1st ECP': '1st year ECP',
     '2nd': '2nd year',
@@ -202,7 +208,8 @@ export const DEFAULT_SETTINGS: Settings = {
     Masters: 'Masters',
     PhD: 'PhD',
   },
-  // From the brief. Their levels (for the rate) aren't known yet.
+  // From the brief. Their levels (for the rate) aren't known yet. How their claims are
+  // made from the sessions they observed is still to be decided (rule 9).
   admins: [
     { name: 'MAHLANGU N', level: '' },
     { name: 'MALEKA R', level: '' },
@@ -223,5 +230,4 @@ export const DEFAULT_SETTINGS: Settings = {
   costCentreName: 'UCDP STUDENT S & A',
   programmeName: 'SI PROGRAMME',
   signatoryName: 'PROF O CHABAYA',
-  signatoryPersonnelNo: '9951504',
 };

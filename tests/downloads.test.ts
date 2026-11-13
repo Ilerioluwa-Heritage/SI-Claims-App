@@ -16,16 +16,15 @@ describe('a whole made-up month, through to the downloads', () => {
     d = await makeDownloads(result, CLAIM_FORM, 10, 2026, S);
   }, 120_000);
 
-  it('works out everyone: SI Leaders from the register and classes, the administrator at 80h', () => {
+  it('works out everyone: SI Leaders from the register and classes; the administrator is not claimed yet', () => {
     // Worked out by hand:
-    // EXAMPLE AB, 5 sessions so 3h data: 01/10 1+2+1=4, 02/10 18H00-20H00 2+2+1=5,
-    //   07/10 20H00-22H30 2.5+2+1=5.5 (held at 23H30), 14/10 3, 21/10 3, two classes 4 = 24.5h x R36.50
+    // EXAMPLE AB, 5 sessions so 3h data: 01/10 1+2+1=4, 02/10 18h15-19h45 -> 18H30-20H00 1.5+2+1=4.5,
+    //   07/10 20H00-22H30 2.5+2+1=5.5 (held at 00H00: 18H30-00H00), 14/10 3, 21/10 3, two classes 4 = 24h x R36.50
     // PATTERN EF, 4 sessions so 2h data: 5 + 4.5 + 3 + 3, three classes 6 = 21.5h x R62.00
     // SAMPLE CD, 2 sessions so 2h data: 11H00-13H00 2+2+1=5, 18H00-19H30 1.5+2+1=4.5 = 9.5h x R47.00
-    // ADMIN GH: 80h x R83.00
+    // ADMIN GH: no claim until the administrators' rule is decided (only listed in the checks).
     expect(result.people.map((p) => `${p.person.formName} ${formatHours(p.totalMinutes)}h ${p.amountCents === null ? '-' : formatRand(p.amountCents)}`)).toEqual([
-      'ADMIN GH 80h R6640.00',
-      'EXAMPLE AB 24.5h R894.25',
+      'EXAMPLE AB 24h R876.00',
       'PATTERN EF 21.5h R1333.00',
       'SAMPLE CD 9.5h R446.50',
     ]);
@@ -56,7 +55,7 @@ describe('a whole made-up month, through to the downloads', () => {
     for (const heading of ["Names that couldn't be matched", 'Side note: in the register but not on the debrief', 'Administrators', 'Text wider than its box']) {
       expect(html).toContain(heading);
     }
-    expect(html).toContain(`Total (4 people)</td><td class="n">${formatRand(result.totalCents)}`);
+    expect(html).toContain(`Total (3 people)</td><td class="n">${formatRand(result.totalCents)}`);
   });
 
   it('never puts a student number in the checks report or on a form', () => {

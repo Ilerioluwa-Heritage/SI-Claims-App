@@ -32,19 +32,22 @@ describe('reading times', () => {
   it('writes times the HRM-05 way', () => {
     expect(formatTime(1080)).toBe('18H00');
     expect(formatTime(450)).toBe('07H30');
-    expect(() => formatTime(1440)).toThrow();
+    expect(formatTime(1440)).toBe('00H00'); // midnight at the end of the day, the latest a line may end (rule 5)
+    expect(() => formatTime(1441)).toThrow();
   });
 });
 
-describe('rule 2: rounding start times', () => {
+describe('rule 2: rounding start times (13 Nov 2026: :15 and :45 go forward)', () => {
   it.each([
     ['14:00', '14H00'],
     ['14:10', '14H00'],
-    ['14:15', '14H00'], // exactly :15 on a start goes back
+    ['14:14', '14H00'],
+    ['14:15', '14H30'], // exactly :15 on a start goes forward
     ['14:16', '14H30'],
     ['14:30', '14H30'],
-    ['14:45', '14H30'], // exactly :45 on a start goes back
-    ['14:46', '15H00'], // :46-:59 go to the next hour
+    ['14:44', '14H30'],
+    ['14:45', '15H00'], // exactly :45 on a start goes forward
+    ['14:46', '15H00'], // :45-:59 go to the next hour
     ['14:59', '15H00'],
   ])('start %s -> %s', (raw, rounded) => {
     expect(start(raw)).toBe(rounded);
@@ -64,7 +67,7 @@ describe('rule 2: rounding end times', () => {
     expect(end(raw)).toBe(rounded);
   });
 
-  it('an end from 23:45 rounds to midnight (rule 5 then pulls it back)', () => {
+  it('an end from 23:45 rounds to midnight (00H00)', () => {
     expect(roundEnd(t('23:45'))).toBe(1440);
   });
 });

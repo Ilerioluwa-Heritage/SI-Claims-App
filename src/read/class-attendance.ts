@@ -1,9 +1,15 @@
 // Reads one SI Leader's class attendance export (Excel, from Google Sheets).
-// Both the SI Leader and the lecturer answer the same form; "I am:" says who.
-// Classes come only from the lecturer's rows (SI Administrator, 2 Nov 2026):
-// their date of lecture, module and lecture time. The SI Leader's rows are
-// read only for their name, to know whose file this is. Nothing else is read:
-// never the email, student number or lecturer's name.
+// Both the SI Leader and the lecturer answer the same form. Classes come only
+// from the lecturer's rows (SI Administrator, 2 Nov 2026): their date of
+// lecture, module and lecture time.
+//
+// A row is the lecturer's (SI Administrator, 13 Nov 2026) when it was sent
+// from a lecturer's email domain (exactly @ul.ac.za or @gmail.com, so a
+// student's @keyaka.ul.ac.za doesn't count) and gives a lecture time, which
+// only the lecturer fills in. Of the email, only the part after the @ is
+// looked at; the address itself is never kept or shown. The other rows are
+// the SI Leader's, read only for their name, to know whose file this is.
+// Nothing else is read: never the student number or the lecturer's name.
 
 import { normaliseName } from '../core/names.ts';
 import type { ClassColumns, Settings } from '../core/settings.ts';
@@ -29,6 +35,14 @@ function nameFromFileName(fileName: string): string {
   return fileName.replace(/\.xlsx$/i, '').split(/\s+(?:january|february|march|april|may|june|july|august|september|october|november|december|class|\()/i)[0]!.trim();
 }
 
+/** True if the email ends in exactly one of the domains: "x@ul.ac.za" yes, "x@keyaka.ul.ac.za" no. */
+export function isLecturerEmail(email: string, domains: readonly string[]): boolean {
+  const at = email.trim().toLowerCase().lastIndexOf('@');
+  if (at < 0) return false;
+  const domain = email.trim().toLowerCase().slice(at + 1);
+  return domains.some((d) => domain === d.trim().toLowerCase().replace(/^@/, ''));
+}
+
 export function readClassAttendance(bytes: Uint8Array, fileName: string, settings: Settings): ClassFile {
   const columns = settings.classColumns;
   const wanted = new Set(Object.values(columns).map(plainHeading));
@@ -44,10 +58,13 @@ export function readClassAttendance(bytes: Uint8Array, fileName: string, setting
   const lecturerRows: { row: number; get: (k: keyof ClassColumns) => Cell | undefined }[] = [];
   for (const { row, cells } of sheet.rows) {
     const get = (k: keyof ClassColumns) => cells.get(headingFor(k)!);
-    const role = get('role')?.text.trim() ?? '';
-    if (!role) continue;
-    if (plainHeading(role) === plainHeading(settings.lecturerAnswer)) lecturerRows.push({ row, get });
-    else if (get('name')?.text.trim()) names.add(normaliseName(get('name')!.text));
+    const fromLecturer = isLecturerEmail(get('email')?.text ?? '', settings.lecturerEmailDomains);
+    const startCell = get('start');
+    const hasTime = hasNumber(startCell) || !!startCell?.text.trim();
+    if (fromLecturer && hasTime) lecturerRows.push({ row, get });
+    else if (hasTime) {
+      problems.push(`${fileName}, row ${row}: it gives a lecture time, but it wasn't sent from a lecturer's email (${settings.lecturerEmailDomains.map((d) => `@${d}`).join(' or ')}), so this class isn't claimed.`);
+    } else if (get('name')?.text.trim()) names.add(normaliseName(get('name')!.text));
   }
 
   let name: string | null = null;

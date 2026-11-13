@@ -57,12 +57,11 @@ describe('one month, start to finish (made-up data)', () => {
 
   it('lists everyone with something to claim, alphabetical by surname, with their hours, rate and amount', () => {
     expect(m.people.map((p) => `${p.person.formName} ${formatHours(p.totalMinutes)}h ${p.rateCents === null ? '-' : formatRand(p.rateCents)} ${p.amountCents === null ? '-' : formatRand(p.amountCents)}`)).toEqual([
-      'ADMIN GH 80h R62.00 R4960.00',
       'EXAMPLE AB 8h R36.50 R292.00', // 05/10 and 06/10: each 1h + 2h prep + 1h data
       'OTHER EF 2h - -', // a class, but no level on the list
       'SAMPLE CD 8.5h R47.00 R399.50',
     ]);
-    expect([formatRand(m.totalCents), m.complete]).toEqual(['R5651.50', false]);
+    expect([formatRand(m.totalCents), m.complete]).toEqual(['R691.50', false]);
   });
 
   it('leaves out other months, people with nothing to claim, and names it cannot match', () => {
@@ -95,10 +94,10 @@ describe('one month, start to finish (made-up data)', () => {
     ]);
   });
 
-  it('claims administrators at 80 hours and shows the sessions they observed', () => {
+  it('no longer claims administrators at a fixed 80h: lists the sessions they observed until their rule is decided', () => {
+    expect(m.people.map((p) => p.person.formName)).not.toContain('ADMIN GH');
     expect(sectionOf('admins')).toEqual([
-      "ADMIN GH: Claimed at 80h x R62.00. What goes on an administrator's form lines hasn't been decided yet, so no form is made.",
-      'ADMIN GH: Observed 1 session: 5h by the same rules.',
+      "ADMIN GH: Not claimed yet: how an administrator's claim is worked out from the sessions they observed hasn't been decided. Observed 1 session in the register: 12/10/2026 14H00-15H00 (Sample CD).",
     ]);
   });
 
@@ -114,7 +113,6 @@ describe('one month, start to finish (made-up data)', () => {
 
   it('gives the control list its rows, with student numbers from the levels list', () => {
     expect(controlListRows(m).map((r) => `${r.surname} ${r.initials} [${r.studentNumber}] ${r.level} ${r.minutes / 60} ${r.rateCents}`)).toEqual([
-      'ADMIN GH [] Masters 80 6200',
       'EXAMPLE AB [200000001] 3rd year 8 3650',
       'OTHER EF []  2 null',
       'SAMPLE CD [] Honours 8.5 4700',

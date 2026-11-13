@@ -10,7 +10,13 @@
 //
 // POPIA: only the fields on WRITTEN below are ever filled. Cell number,
 // student number, address, bank, account, branch, signatures, the approver
-// row and the signature/date boxes are left blank and fillable.
+// row and the signature/date boxes are left blank and fillable. The
+// signatory's personnel number is always left blank too (13 Nov 2026).
+//
+// Dates (SI Administrator, 13 Nov 2026): the date at the top (next to the UL
+// student number) and the date next to the claimant's signature are always
+// the 1st of the month after the claim's month; the month and year boxes are
+// the month chosen in the app.
 //
 // Works from the form's bytes and returns the filled file's bytes, so the
 // website, the phone app and the tests share it. Nothing is written to disk.
@@ -367,7 +373,8 @@ function valuesFor(content: FormContent, lines: ClaimRow[], settings: Settings):
     [HEADER.hoursAgain, showHours(content.totalMinutes)],
     [HEADER.dateSigned, formatDates([content.submissionDate])],
     [HEADER.approverName, settings.signatoryName],
-    [HEADER.approverNumber, settings.signatoryPersonnelNo],
+    // Always blank (SI Administrator, 13 Nov 2026), also clearing one an older form has.
+    [HEADER.approverNumber, ''],
   ]);
   lines.forEach((row, i) => {
     const f = lineFields(i + 1);
@@ -465,8 +472,9 @@ export async function readClaimForm(bytes: Uint8Array): Promise<{ text: FormText
  * as it is: its fonts, sizes and field names, and everything typed in the boxes
  * this program doesn't fill (the SI Leader's own details stay as they were,
  * unread). All 13 lines are rewritten, so a removed line comes out blank. The
- * boxes every claim has (school, cost centre, approver, dates) are filled only
- * where the form has them blank.
+ * two dates are always set to the 1st of the next month, and the approver's
+ * personnel number is cleared. The other boxes every claim has (school, cost
+ * centre, approver's name) are filled only where the form has them blank.
  */
 export async function rewriteClaimForm(form: Uint8Array, edited: EditedForm, settings: Settings): Promise<{ bytes: Uint8Array; warnings: string[] }> {
   if (edited.rows.length > settings.rowsPerPage) throw new Error(`A form holds at most ${settings.rowsPerPage} lines.`);
@@ -482,7 +490,8 @@ export async function rewriteClaimForm(form: Uint8Array, edited: EditedForm, set
     [HEADER.costCentreNo, settings.costCentreNo],
     [HEADER.costCentreName, settings.costCentreName],
     [HEADER.approverName, settings.signatoryName],
-    [HEADER.approverNumber, settings.signatoryPersonnelNo],
+    // Always blank (SI Administrator, 13 Nov 2026), also clearing one an older form has.
+    [HEADER.approverNumber, ''],
     [HEADER.date, submitted],
     [HEADER.dateSigned, submitted],
   ]);
@@ -497,7 +506,7 @@ export async function rewriteClaimForm(form: Uint8Array, edited: EditedForm, set
     values.set(f.timeOut, row?.timeOut ?? '');
     values.set(f.hours, row ? showHours(row.minutes) : '');
   }
-  const keepIfFilled = new Set<string>([HEADER.school, HEADER.costCentreNo, HEADER.costCentreName, HEADER.approverName, HEADER.approverNumber, HEADER.date, HEADER.dateSigned]);
+  const keepIfFilled = new Set<string>([HEADER.school, HEADER.costCentreNo, HEADER.costCentreName, HEADER.approverName]);
   const { bytes, tooWide } = await fillOne(form, values, keepIfFilled);
   return { bytes, warnings: tooWide.map((name) => `The ${label(name)} "${values.get(name)}" is wider than its box at the form's own font size, so part of it may be cut off.`) };
 }
